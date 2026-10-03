@@ -16,9 +16,10 @@ export const orderInputSchema = z.object({
   delivery: z.object({
     area: z.string().trim().min(2).max(160),
     method: z.enum(['campus', 'home']),
-    handoverSpot: z.string().trim().max(120).optional().default(''),
+    handoverSpot: z.string().trim().min(1).max(120),
     slotId: z.string().trim().max(80).optional().default(''),
-    locationText: z.string().trim().max(240).optional().default(''),
+    locationText: z.string().trim().min(1).max(240),
+    pickupDate: z.string().trim().min(1).max(40),
   }),
   gift: z.object({
     isGift: z.boolean().default(false),

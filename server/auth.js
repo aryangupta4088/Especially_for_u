@@ -105,7 +105,32 @@ export async function registerUser(repository, { email, password, name, phone })
     passwordHash,
     name,
     phone: phone || '',
-    role: 'USER',
+    role: 'user',
+  });
+  return { token: signUserToken(user), user: sanitizeUser(user) };
+}
+
+export async function registerAdmin(repository, { email, password, name, phone, adminPassword }) {
+  const expected = process.env.ADMIN_SIGNUP_PASSWORD;
+  if (!expected || !adminPassword || adminPassword !== expected) {
+    const e = new Error('Invalid admin signup password.');
+    e.code = 'INVALID_ADMIN_PASSWORD';
+    throw e;
+  }
+  const existing = await repository.getUserByEmail(email);
+  if (existing) {
+    const e = new Error('An account with this email already exists.');
+    e.code = 'EMAIL_TAKEN';
+    throw e;
+  }
+  const passwordHash = password ? await bcrypt.hash(password, 12) : null;
+  const user = await repository.createUser({
+    id: `U-${randomUUID().slice(0, 8).toUpperCase()}`,
+    email,
+    passwordHash,
+    name,
+    phone: phone || '',
+    role: 'admin',
   });
   return { token: signUserToken(user), user: sanitizeUser(user) };
 }

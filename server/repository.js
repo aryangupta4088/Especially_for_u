@@ -14,6 +14,7 @@ function parseJson(value, fallback) {
 
 const memory = {
   orders: [],
+  orderQueries: [],
   requests: [],
   auditLogs: [],
   notificationLogs: [],
@@ -108,7 +109,7 @@ function memoryRepository() {
     async getPublicSettings() { return clone(catalogStoreSettings); },
     async listDeliveryAreas() { return catalogDeliveryAreas.map((label, index) => ({ id: String(index + 1), label, areaType: index === 0 ? 'CAMPUS' : label.startsWith('Other') ? 'MANUAL' : 'LOCAL', fee: index === 0 ? 0 : 50, approvalRequired: label.startsWith('Other'), isActive: true })); },
     async listDeliverySlots() { return clone(catalogDeliverySlots); },
-    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
+    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, userId: order.userId || null, estimatedDate: null, pickupDate: order.delivery?.pickupDate || null, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
     async getOrder(id) { return memory.orders.find((order) => order.id === id) || null; },
     async getOrderWithItems(id) {
       const order = memory.orders.find((o) => o.id === id);
@@ -219,6 +220,28 @@ function memoryRepository() {
     async listAuditLogs(limit = 50) { return clone(memory.auditLogs.slice(0, limit)); },
     async listNotificationLogs(limit = 50) { return clone(memory.notificationLogs.slice(0, limit)); },
     async updateSettings(updates) { Object.assign(catalogStoreSettings, updates); return clone(catalogStoreSettings); },
+    async updateOrderEstimatedDate(id, estimatedDate, actor) {
+      const order = memory.orders.find((o) => o.id === id);
+      if (!order) return null;
+      order.estimatedDate = estimatedDate;
+      memory.auditLogs.unshift({ actor, action: 'UPDATE_ESTIMATED_DATE', entity: 'order', entityId: id, diff: { estimatedDate }, createdAt: new Date().toISOString() });
+      return clone(order);
+    },
+    async createOrderQuery({ orderId, userId, message }) {
+      const saved = { id: memory.orderQueries.length + 1, orderId, userId, message, adminReply: null, status: 'OPEN', createdAt: new Date().toISOString(), repliedAt: null };
+      memory.orderQueries.unshift(saved);
+      return clone(saved);
+    },
+    async listOrderQueriesByOrder(orderId) { return clone(memory.orderQueries.filter((q) => q.orderId === orderId)); },
+    async listAllOrderQueries() { return clone(memory.orderQueries); },
+    async replyToOrderQuery(id, reply, actor) {
+      const q = memory.orderQueries.find((x) => x.id === id);
+      if (!q) return null;
+      q.adminReply = reply; q.status = 'REPLIED'; q.repliedAt = new Date().toISOString();
+      memory.auditLogs.unshift({ actor, action: 'REPLY_QUERY', entity: 'order_query', entityId: String(id), diff: { reply }, createdAt: new Date().toISOString() });
+      return clone(q);
+    },
+    async listOrdersByUser(userId) { return clone(memory.orders.filter((o) => o.userId === userId || o.user_id === userId)); },
   };
 }
 
@@ -395,8 +418,8 @@ function mysqlRepository(pool) {
       try {
         await connection.beginTransaction();
         await connection.query(
-          'INSERT INTO orders (id,status,customer_name,customer_email,customer_phone,customer_note,delivery_area,delivery_method,handover_spot,delivery_slot,location_text,location_approval,subtotal,delivery_fee,gift_wrap_fee,total,payment_plan,advance_due,balance_due,payment_status,gift_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-          [order.id, order.status, order.customer.name, order.customer.email, order.customer.phone, order.customer.note, order.delivery.area, order.delivery.method, order.delivery.handoverSpot, order.delivery.slotId, order.delivery.locationText, order.pricing.locationApproval, order.pricing.subtotal, order.pricing.deliveryFee, order.pricing.giftWrapFee, order.pricing.total, order.pricing.paymentPlan, order.pricing.advanceDue, order.pricing.balanceDue, 'PENDING', JSON.stringify(order.gift)]
+          'INSERT INTO orders (id,user_id,status,estimated_date,pickup_date,customer_name,customer_email,customer_phone,customer_note,delivery_area,delivery_method,handover_spot,delivery_slot,location_text,location_approval,subtotal,delivery_fee,gift_wrap_fee,total,payment_plan,advance_due,balance_due,payment_status,gift_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [order.id, order.userId || null, order.status, null, order.delivery?.pickupDate || null, order.customer.name, order.customer.email, order.customer.phone, order.customer.note, order.delivery.area, order.delivery.method, order.delivery.handoverSpot, order.delivery.slotId, order.delivery.locationText, order.pricing.locationApproval, order.pricing.subtotal, order.pricing.deliveryFee, order.pricing.giftWrapFee, order.pricing.total, order.pricing.paymentPlan, order.pricing.advanceDue, order.pricing.balanceDue, 'PENDING', JSON.stringify(order.gift)]
         );
         for (const item of order.pricing.lineItems) {
           await connection.query(
@@ -410,17 +433,20 @@ function mysqlRepository(pool) {
     },
 
     async getOrder(id) {
-      const [rows] = await pool.query('SELECT * FROM orders WHERE id = ? LIMIT 1', [id]);
+      const [rows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate FROM orders WHERE id = ? LIMIT 1', [id]);
       return rows[0] || null;
     },
 
     async getOrderWithItems(id) {
-      const [orderRows] = await pool.query('SELECT * FROM orders WHERE id = ? LIMIT 1', [id]);
+      const [orderRows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate FROM orders WHERE id = ? LIMIT 1', [id]);
       if (!orderRows[0]) return null;
       const [itemRows] = await pool.query('SELECT * FROM order_items WHERE order_id = ? ORDER BY id', [id]);
       const order = orderRows[0];
       return {
         ...order,
+        userId: order.user_id,
+        estimatedDate: order.estimated_date,
+        pickupDate: order.pickup_date,
         gift: parseJson(order.gift_json, {}),
         items: itemRows.map((item) => ({
           productId: item.product_id,
@@ -434,8 +460,23 @@ function mysqlRepository(pool) {
     },
 
     async listOrders() {
-      const [rows] = await pool.query('SELECT id, status, customer_name AS customer, customer_email AS email, customer_phone AS phone, total, payment_status AS paymentStatus, payment_plan AS paymentPlan, delivery_area AS deliveryArea, delivery_method AS deliveryMethod, location_approval AS locationApproval, advance_due AS advanceDue, balance_due AS balanceDue, created_at AS createdAt FROM orders ORDER BY created_at DESC LIMIT 100');
+      const [rows] = await pool.query('SELECT id, user_id AS userId, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, customer_name AS customer, customer_email AS email, customer_phone AS phone, total, payment_status AS paymentStatus, payment_plan AS paymentPlan, delivery_area AS deliveryArea, delivery_method AS deliveryMethod, location_approval AS locationApproval, advance_due AS advanceDue, balance_due AS balanceDue, created_at AS createdAt FROM orders ORDER BY created_at DESC LIMIT 100');
       return rows;
+    },
+
+    async listOrdersByUser(userId) {
+      const [rows] = await pool.query('SELECT id, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, total, payment_status AS paymentStatus, delivery_area AS deliveryArea, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
+      return rows;
+    },
+
+    async updateOrderEstimatedDate(id, estimatedDate, actor) {
+      const [existing] = await pool.query('SELECT estimated_date FROM orders WHERE id = ? LIMIT 1', [id]);
+      if (!existing[0]) return null;
+      const prev = existing[0].estimated_date;
+      await pool.query('UPDATE orders SET estimated_date = ? WHERE id = ?', [estimatedDate || null, id]);
+      await pool.query('INSERT INTO audit_logs (actor, action, entity, entity_id, diff_json) VALUES (?,?,?,?,?)', [actor, 'UPDATE_ESTIMATED_DATE', 'order', id, JSON.stringify({ from: prev, to: estimatedDate })]);
+      const [rows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate FROM orders WHERE id = ? LIMIT 1', [id]);
+      return rows[0] || null;
     },
 
     async updateOrderStatus(id, status, actor) {
@@ -551,6 +592,40 @@ function mysqlRepository(pool) {
         await pool.query(`UPDATE site_settings SET ${fields.join(', ')} WHERE id = ?`, values);
       }
       return this.getPublicSettings();
+    },
+
+    // ── Order Queries (Ask a Query) ───────────────────────────────────
+    async createOrderQuery({ orderId, userId, message }) {
+      const [res] = await pool.query(
+        'INSERT INTO order_queries (order_id, user_id, message) VALUES (?,?,?)',
+        [orderId, userId, message]
+      );
+      const [[row]] = await pool.query('SELECT * FROM order_queries WHERE id = ? LIMIT 1', [res.insertId]);
+      return row ? { ...row, orderId: row.order_id, userId: row.user_id, adminReply: row.admin_reply, repliedAt: row.replied_at } : null;
+    },
+    async listOrderQueriesByOrder(orderId) {
+      const [rows] = await pool.query('SELECT *, order_id AS orderId, user_id AS userId, admin_reply AS adminReply, replied_at AS repliedAt FROM order_queries WHERE order_id = ? ORDER BY created_at DESC', [orderId]);
+      return rows;
+    },
+    async listAllOrderQueries() {
+      const [rows] = await pool.query(`
+        SELECT q.id, q.order_id AS orderId, q.user_id AS userId, q.message, q.admin_reply AS adminReply,
+               q.status, q.created_at AS createdAt, q.replied_at AS repliedAt,
+               o.customer_name AS customerName, o.customer_email AS customerEmail,
+               o.total AS orderTotal, o.status AS orderStatus
+        FROM order_queries q
+        LEFT JOIN orders o ON o.id = q.order_id
+        ORDER BY q.created_at DESC LIMIT 200
+      `);
+      return rows;
+    },
+    async replyToOrderQuery(id, reply, actor) {
+      const [existing] = await pool.query('SELECT status FROM order_queries WHERE id = ? LIMIT 1', [id]);
+      if (!existing[0]) return null;
+      await pool.query('UPDATE order_queries SET admin_reply = ?, status = ?, replied_at = NOW() WHERE id = ?', [reply, 'REPLIED', id]);
+      await pool.query('INSERT INTO audit_logs (actor, action, entity, entity_id, diff_json) VALUES (?,?,?,?,?)', [actor, 'REPLY_QUERY', 'order_query', String(id), JSON.stringify({ reply })]);
+      const [[row]] = await pool.query('SELECT *, order_id AS orderId, user_id AS userId, admin_reply AS adminReply, replied_at AS repliedAt FROM order_queries WHERE id = ? LIMIT 1', [id]);
+      return row || null;
     },
   };
 }

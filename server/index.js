@@ -13,7 +13,7 @@ import { calculateOrder, customRequestSchema, orderInputSchema } from './pricing
 import { notificationConfig, notifyNewOrder, notifyNewCustomRequest, sendOrderConfirmation } from './notifications.js';
 import {
   authenticateAdmin, requireAdminJWT, authConfig,
-  registerUser, authenticateUser, authenticateGoogle,
+  registerUser, registerAdmin, authenticateUser, authenticateGoogle,
   requireUserJWT, optionalUserJWT,
   generatePasswordResetToken, resetPasswordWithToken,
 } from './auth.js';
@@ -23,6 +23,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const repository = createRepository();
 const port = Number(process.env.PORT || (process.env.NODE_ENV === 'production' ? 3000 : 4000));
+
+(async function testDbConnection() {
+  const pool = (await import('./db.js')).getPool();
+  if (!pool) return;
+  try {
+    const conn = await pool.getConnection();
+    await conn.query('SELECT 1');
+    conn.release();
+    console.log('[db] Connected to managed MySQL (Aiven compatible). Pool size = ' + (pool.config?.connectionLimit || 5));
+  } catch (err) {
+    console.error('[db-connect-error] Could not connect to database:', err.message);
+    console.error('[db-connect-error] Code:', err.code, '| Check DATABASE_URL / DB_HOST / DB_USER / DB_PASSWORD / DB_NAME / DB_SSL_CA in .env');
+    console.error('[db-connect-error] Aiven requires SSL — make sure ca.pem is at the project root or set DB_SSL_CA path.');
+    console.error('[db-connect-error] Falling back to in-memory store (data will not persist).');
+  }
+})();
 
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
@@ -94,14 +110,15 @@ app.get('/api/delivery/areas', async (_request, response, next) => {
   catch (error) { return next(error); }
 });
 
-// ── Order creation ─────────────────────────────────────────────────────
-app.post('/api/orders', async (request, response, next) => {
+// ── Order creation (protected) ────────────────────────────────────────
+app.post('/api/orders', requireUserJWT, async (request, response, next) => {
   try {
     const input = orderInputSchema.parse(request.body);
     const pricing = calculateOrder(input, catalogProducts, await repository.getPublicSettings());
     const orderId = newEntityId('EFU');
     const order = {
       id: orderId,
+      userId: request.user.sub,
       status: pricing.advanceDue > 0 ? 'PENDING_PAYMENT' : 'PENDING_CONFIRMATION',
       customer: input.customer,
       delivery: input.delivery,
@@ -145,8 +162,8 @@ app.post('/api/orders', async (request, response, next) => {
   } catch (error) { return next(error); }
 });
 
-// ── Payment verification ───────────────────────────────────────────────
-app.post('/api/payments/verify', async (request, response, next) => {
+// ── Payment verification (protected) ──────────────────────────────────
+app.post('/api/payments/verify', requireUserJWT, async (request, response, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = request.body;
 
@@ -195,16 +212,60 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), asy
   } catch (error) { return next(error); }
 });
 
-app.get('/api/orders/:id', async (request, response, next) => {
+app.get('/api/orders', requireUserJWT, async (request, response, next) => {
   try {
-    const order = await repository.getOrder(request.params.id);
+    const orders = await repository.listOrdersByUser(request.user.sub);
+    return response.json({ orders });
+  } catch (error) { return next(error); }
+});
+
+app.get('/api/orders/:id', requireUserJWT, async (request, response, next) => {
+  try {
+    const order = await repository.getOrderWithItems(request.params.id);
     if (!order) return response.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'We could not find that order.' });
+    if (order.user_id && order.user_id !== request.user.sub && !order.userId) {
+      // allow if user_id column is not set yet (backward compat)
+    } else if ((order.userId || order.user_id) && (order.userId || order.user_id) !== request.user.sub) {
+      return response.status(403).json({ error: 'FORBIDDEN', message: 'This order does not belong to you.' });
+    }
     return response.json({ order });
   } catch (error) { return next(error); }
 });
 
-// ── Custom requests ────────────────────────────────────────────────────
-app.post('/api/custom-requests', async (request, response, next) => {
+// ── Order Queries (user side) ──────────────────────────────────────────
+app.post('/api/orders/:id/queries', requireUserJWT, async (request, response, next) => {
+  try {
+    const order = await repository.getOrder(request.params.id);
+    if (!order) return response.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'We could not find that order.' });
+    if ((order.userId || order.user_id) && (order.userId || order.user_id) !== request.user.sub) {
+      return response.status(403).json({ error: 'FORBIDDEN', message: 'This order does not belong to you.' });
+    }
+    const { message } = request.body || {};
+    if (!message || !String(message).trim()) {
+      return response.status(400).json({ error: 'MISSING_MESSAGE', message: 'Query message is required.' });
+    }
+    const saved = await repository.createOrderQuery({
+      orderId: request.params.id,
+      userId: request.user.sub,
+      message: String(message).trim(),
+    });
+    return response.status(201).json({ query: saved });
+  } catch (error) { return next(error); }
+});
+
+app.get('/api/orders/:id/queries', requireUserJWT, async (request, response, next) => {
+  try {
+    const order = await repository.getOrder(request.params.id);
+    if (!order) return response.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'We could not find that order.' });
+    if ((order.userId || order.user_id) && (order.userId || order.user_id) !== request.user.sub) {
+      return response.status(403).json({ error: 'FORBIDDEN', message: 'This order does not belong to you.' });
+    }
+    return response.json({ queries: await repository.listOrderQueriesByOrder(request.params.id) });
+  } catch (error) { return next(error); }
+});
+
+// ── Custom requests (protected) ───────────────────────────────────────
+app.post('/api/custom-requests', requireUserJWT, async (request, response, next) => {
   try {
     const input = customRequestSchema.parse(request.body);
     const product = catalogProducts.find((candidate) => candidate.id === input.productId);
@@ -237,6 +298,24 @@ app.post('/api/auth/register', async (request, response, next) => {
     return response.status(201).json(result);
   } catch (error) {
     if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: 'EMAIL_TAKEN', message: error.message });
+    return next(error);
+  }
+});
+
+app.post('/api/auth/admin-register', async (request, response, next) => {
+  try {
+    const { email, password, name, phone, adminPassword } = request.body || {};
+    if (!email || !password || !name) {
+      return response.status(400).json({ error: 'MISSING_FIELDS', message: 'Name, email and password are required.' });
+    }
+    if (!adminPassword) {
+      return response.status(400).json({ error: 'MISSING_ADMIN_PASSWORD', message: 'Admin signup password is required.' });
+    }
+    const result = await registerAdmin(repository, { email, password, name, phone, adminPassword });
+    return response.status(201).json(result);
+  } catch (error) {
+    if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: 'EMAIL_TAKEN', message: error.message });
+    if (error.code === 'INVALID_ADMIN_PASSWORD') return response.status(403).json({ error: error.code, message: error.message });
     return next(error);
   }
 });
@@ -390,6 +469,33 @@ app.patch('/api/admin/orders/:id/location', requireAdminJWT, async (request, res
     const updated = await repository.updateLocationApproval(request.params.id, approval, request.admin?.email || 'admin');
     if (!updated) return response.status(404).json({ error: 'ORDER_NOT_FOUND' });
     return response.json({ order: updated });
+  } catch (error) { return next(error); }
+});
+
+app.patch('/api/admin/orders/:id/estimated-date', requireAdminJWT, async (request, response, next) => {
+  try {
+    const { estimatedDate } = request.body || {};
+    const updated = await repository.updateOrderEstimatedDate(request.params.id, estimatedDate || null, request.admin?.email || 'admin');
+    if (!updated) return response.status(404).json({ error: 'ORDER_NOT_FOUND' });
+    return response.json({ order: updated });
+  } catch (error) { return next(error); }
+});
+
+// ── Admin Order Queries ────────────────────────────────────────────────
+app.get('/api/admin/order-queries', requireAdminJWT, async (_request, response, next) => {
+  try { return response.json({ queries: await repository.listAllOrderQueries() }); }
+  catch (error) { return next(error); }
+});
+
+app.patch('/api/admin/order-queries/:id/reply', requireAdminJWT, async (request, response, next) => {
+  try {
+    const { reply } = request.body || {};
+    if (!reply || !String(reply).trim()) {
+      return response.status(400).json({ error: 'MISSING_REPLY', message: 'Reply text is required.' });
+    }
+    const updated = await repository.replyToOrderQuery(request.params.id, String(reply).trim(), request.admin?.email || 'admin');
+    if (!updated) return response.status(404).json({ error: 'QUERY_NOT_FOUND' });
+    return response.json({ query: updated });
   } catch (error) { return next(error); }
 });
 

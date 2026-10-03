@@ -52,6 +52,15 @@ export function AuthProvider({ children }) {
     } finally { setLoading(false); }
   }, [request, persist]);
 
+  const registerAdmin = useCallback(async ({ name, email, password, phone, adminPassword }) => {
+    setLoading(true);
+    try {
+      const data = await request('/api/auth/admin-register', { name, email, password, phone, adminPassword }, { includeAuth: false });
+      persist(data.token, data.user);
+      return data;
+    } finally { setLoading(false); }
+  }, [request, persist]);
+
   const login = useCallback(async ({ email, password }) => {
     setLoading(true);
     try {
@@ -105,20 +114,28 @@ export function AuthProvider({ children }) {
   }, [token, user, fetchMe]);
 
   const authenticated = Boolean(token && user);
+  const isAdmin = useMemo(() => {
+    const r = user?.role;
+    if (r === 'admin' || r === 'ADMIN' || r === 'OWNER' || r === 'Owner') return true;
+    if (localStorage.getItem('efu_admin_token')) return true;
+    return false;
+  }, [user]);
   const value = useMemo(() => ({
     token,
     user,
     loading,
     isAuthenticated: authenticated,
+    isAdmin,
     login,
     register,
+    registerAdmin,
     loginWithGoogle,
     logout,
     forgotPassword,
     resetPassword,
     fetchMe,
     request,
-  }), [token, user, loading, authenticated, login, register, loginWithGoogle, logout, forgotPassword, resetPassword, fetchMe, request]);
+  }), [token, user, loading, authenticated, isAdmin, login, register, registerAdmin, loginWithGoogle, logout, forgotPassword, resetPassword, fetchMe, request]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

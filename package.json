@@ -1,0 +1,39 @@
+{
+  "name": "especially-for-u",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "server": "node server/index.js",
+    "start": "NODE_ENV=production node server/index.js",
+    "db:migrate": "node server/migrate.js",
+    "db:seed": "node server/seed.js"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "framer-motion": "latest",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "latest",
+    "mysql2": "^3.24.5",
+    "nodemailer": "^10.0.14",
+    "razorpay": "^2.9.8",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "latest",
+    "tailwindcss": "latest",
+    "vite": "latest",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "autoprefixer": "latest",
+    "postcss": "latest"
+  }
+}

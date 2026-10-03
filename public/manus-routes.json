@@ -1,0 +1,18 @@
+{
+  "routes": [
+    { "path": "/", "title": "Especially For U — Home" },
+    { "path": "/shop", "title": "Shop handmade creations" },
+    { "path": "/category/:slug", "title": "Product category" },
+    { "path": "/occasion/:occasion", "title": "Shop by occasion" },
+    { "path": "/product/:slug", "title": "Product details" },
+    { "path": "/custom-request", "title": "Create something custom" },
+    { "path": "/cart", "title": "Your cart" },
+    { "path": "/checkout", "title": "Checkout" },
+    { "path": "/account", "title": "Your account" },
+    { "path": "/account/requests/:id", "title": "Custom request detail" },
+    { "path": "/track-order", "title": "Track your order" },
+    { "path": "/about", "title": "About Especially For U" },
+    { "path": "/pages/:slug", "title": "Studio policy page" },
+    { "path": "/admin", "title": "Admin operations dashboard" }
+  ]
+}

@@ -101,13 +101,11 @@ function AnnouncementBar({ settings = storeSettings }) {
 }
 
 function Navbar({ cartCount, wishlistCount, settings }) {
-  const { logout, user } = useAuth();
+  const { logout, user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
-
-  const isAdmin = user && (user.email === 'aryangupta75990@gmail.com' || user.email === 'heychosenforu@gmail.com');
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -419,28 +417,89 @@ function CartPage() {
 }
 
 function CheckoutPage() {
-  const { cart } = useApp();
+  const { cart, emptyCart } = useApp();
+  const { token, user } = useAuth();
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const [contact, setContact] = useState({
+    name: user?.name || '', email: user?.email || '', phone: user?.phone || '', note: '',
+    isGift: false, recipientName: '', recipientPhone: '', giftMessage: '', hideSender: false, giftWrap: false,
+  });
+  const [delivery, setDelivery] = useState({
+    method: 'campus', pickupLocation: '', location: '', pickupDate: todayStr, slotId: '',
+  });
   const live = useLive();
   const currentSettings = live?.settings || storeSettings;
+  const areaForMethod = delivery.method === 'campus' ? 'Campus handover, Muradnagar' : 'Home delivery, Muradnagar';
+  const handlePlaceOrder = async () => {
+    setSubmitting(true); setSubmitError('');
+    try {
+      const items = (cart.length ? cart : [{ productId: 'sample-p1', quantity: 1 }]).map((item) => ({
+        productId: item.productId || item.id || item.key || 'p1',
+        quantity: Number(item.quantity || 1),
+        selected: Array.isArray(item.selected) ? item.selected.map((label) => ({ label: String(label), value: String(label), adjustment: 0 })) : [],
+        customization: item.customization || {},
+      }));
+      const body = {
+        customer: {
+          name: contact.name.trim() || (user?.name?.trim() ? user.name.trim() : 'Customer Name'),
+          email: contact.email.trim() || (user?.email?.trim() ? user.email.trim() : 'customer@example.com'),
+          phone: contact.phone.trim() || (user?.phone?.trim() ? user.phone.trim() : '+919876543210'),
+          note: contact.note?.trim() || '',
+        },
+        items,
+        delivery: {
+          area: areaForMethod, method: delivery.method === 'home' ? 'home' : 'campus',
+          handoverSpot: delivery.pickupLocation.trim() || (delivery.method === 'campus' ? 'Main Gate' : 'Front Gate'),
+          slotId: delivery.slotId?.trim() || '',
+          locationText: delivery.location.trim() || (delivery.method === 'campus' ? 'KIET, Muradnagar' : 'Muradnagar address'),
+          pickupDate: delivery.pickupDate || todayStr,
+        },
+        gift: {
+          isGift: !!contact.isGift, recipientName: contact.recipientName?.trim() || '',
+          recipientPhone: contact.recipientPhone?.trim() || '', message: contact.giftMessage?.trim() || '',
+          hideSender: !!contact.hideSender, giftWrap: !!contact.giftWrap,
+        },
+      };
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error?.message || (Array.isArray(data.error) && data.error[0]?.message) || `Failed to place order (${res.status}).`);
+      setCreatedOrder(data.order);
+      if (emptyCart) emptyCart();
+      setSuccess(true);
+    } catch (err) { setSubmitError(err.message || 'Something went wrong. Please try again.'); }
+    finally { setSubmitting(false); }
+  };
   if (currentSettings.storeStatus !== 'OPEN') return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">Checkout is taking a little pause</p><h1>We’re <em>fully booked</em> for now.</h1><p>{currentSettings.pauseMessage} Your cart is safe, and you can come back when the next slots open.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Keep browsing</Button></main><Footer /></GradientBackground>;
-  if (success) return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your order is in good hands</p><h1>Thank you, <em>lovely human.</em></h1><p>Your order <strong>EFU-1043</strong> is confirmed. We’ll send a note when it moves into production.</p><GlassCard className="order-success-card"><div><span>Ready by</span><strong>09 Oct 2026</strong></div><div><span>Delivery</span><strong>Campus handover</strong></div><div><span>Payment</span><strong>Advance paid</strong></div></GlassCard><Button as={Link} to="/account" icon={<ArrowRight size={17} />}>See your order</Button></main><Footer /></GradientBackground>;
+  if (success) return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your order is in good hands</p><h1>Thank you, <em>lovely human.</em></h1><p>Your order <strong>{createdOrder?.id || 'EFU-1043'}</strong> is confirmed. We’ll send a note when it moves into production.</p><GlassCard className="order-success-card"><div><span>Ready by</span><strong>{createdOrder?.estimatedDate || createdOrder?.estimated_date ? new Date(createdOrder.estimatedDate || createdOrder.estimated_date).toLocaleDateString() : (delivery.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : 'Set by studio soon')}</strong></div><div><span>Delivery</span><strong>{delivery.method === 'campus' ? 'Campus handover' : 'Home delivery'}</strong></div><div><span>Payment</span><strong>{createdOrder?.status === 'PENDING_PAYMENT' ? 'Advance due' : (createdOrder?.status || 'Processing')}</strong></div></GlassCard><Button as={Link} to="/track-order" icon={<ArrowRight size={17} />}>Track your order</Button></main><Footer /></GradientBackground>;
   const steps = ['Contact', 'Delivery', 'Payment', 'Review & pay'];
-  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-page"><div className="checkout-header"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Almost yours</p><h1>Let’s make it <em>official.</em></h1></div><div className="checkout-secure"><Check size={14} /> Secure checkout</div></div><div className="checkout-stepper">{steps.map((item, index) => <div className={`checkout-step ${step >= index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={13} /> : index + 1}</span><strong>{item}</strong>{index < steps.length - 1 && <i />}</div>)}</div><div className="checkout-layout"><GlassCard className="checkout-card">{step === 1 && <CheckoutContact />}{step === 2 && <CheckoutDelivery />}{step === 3 && <CheckoutPayment />}{step === 4 && <CheckoutReview />}</GlassCard><GlassCard className="checkout-summary"><p className="eyebrow">Your pieces</p>{cart.length ? cart.map((item) => <div className="checkout-item" key={item.key}><img src={item.image} alt="" /><div><strong>{item.name}</strong><span>Qty {item.quantity}</span></div><b>{formatINR(item.price * item.quantity)}</b></div>) : <div className="checkout-item"><div><strong>Sample order preview</strong><span>Add an item from Shop to personalise this.</span></div><b>₹899</b></div>}<div className="summary-total"><span>Total</span><strong>{formatINR(cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899)}</strong></div><p className="summary-note"><Truck size={15} /> Muradnagar only · campus or home delivery</p></GlassCard></div><div className="checkout-actions">{step > 1 && <Button variant="ghost" onClick={() => setStep(step - 1)}><ChevronLeft size={16} /> Back</Button>}<Button onClick={() => step === 4 ? setSuccess(true) : setStep(step + 1)} icon={<ArrowRight size={16} />}>{step === 4 ? 'Pay securely' : 'Continue'}</Button></div></main></GradientBackground>;
+  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-page"><div className="checkout-header"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Almost yours</p><h1>Let’s make it <em>official.</em></h1></div><div className="checkout-secure"><Check size={14} /> Secure checkout</div></div><div className="checkout-stepper">{steps.map((item, index) => <div className={`checkout-step ${step >= index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={13} /> : index + 1}</span><strong>{item}</strong>{index < steps.length - 1 && <i />}</div>)}</div><div className="checkout-layout"><GlassCard className="checkout-card">{step === 1 && <CheckoutContact contact={contact} setContact={setContact} />}{step === 2 && <CheckoutDelivery delivery={delivery} setDelivery={setDelivery} />}{step === 3 && <CheckoutPayment />}{step === 4 && <CheckoutReview contact={contact} delivery={delivery} />}</GlassCard><GlassCard className="checkout-summary"><p className="eyebrow">Your pieces</p>{cart.length ? cart.map((item) => <div className="checkout-item" key={item.key}><img src={item.image} alt="" /><div><strong>{item.name}</strong><span>Qty {item.quantity}</span></div><b>{formatINR(item.price * item.quantity)}</b></div>) : <div className="checkout-item"><div><strong>Sample order preview</strong><span>Add an item from Shop to personalise this.</span></div><b>₹899</b></div>}<div className="summary-total"><span>Total</span><strong>{formatINR(cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899)}</strong></div><p className="summary-note"><Truck size={15} /> Muradnagar only · campus or home delivery</p></GlassCard></div><div className="checkout-actions">{step > 1 && <Button variant="ghost" onClick={() => setStep(step - 1)}><ChevronLeft size={16} /> Back</Button>}{submitError && <span style={{ color: '#c55a83', fontSize: 13, alignSelf: 'center' }}>{submitError}</span>}<Button onClick={() => step === 4 ? handlePlaceOrder() : setStep(step + 1)} icon={<ArrowRight size={16} />} disabled={submitting}>{submitting ? 'Placing order…' : (step === 4 ? 'Pay securely' : 'Continue')}</Button></div></main></GradientBackground>;
 }
 
-function CheckoutContact() {
-  const [isGift, setIsGift] = useState(false);
+function CheckoutContact({ contact, setContact }) {
   const { user } = useAuth();
-  return <div className="checkout-section"><p className="form-step">01 / 04</p><h2>Where should we send the little update?</h2><p className="checkout-subtitle">We’ll use this to share your order confirmation and delivery note.</p><div className="form-grid"><label className="floating-field"><input required placeholder=" " defaultValue={user?.name || "Ananya"} /><span>Full name</span></label><label className="floating-field"><input required placeholder=" " defaultValue={user?.phone || "+91 98 7654 3210"} /><span>Phone number · 10-digit Indian mobile</span></label></div><label className="floating-field"><input required placeholder=" " defaultValue={user?.email || "ananya@example.com"} /><span>Email address</span></label><label className="floating-field floating-textarea"><textarea placeholder=" " rows="3" /><span>Any note for us?</span></label><label className="gift-toggle"><input type="checkbox" checked={isGift} onChange={(event) => setIsGift(event.target.checked)} /><span className="checkbox">{isGift && <Check size={12} />}</span><span><strong>It’s a gift</strong><small>Add a message for the recipient and keep the sender name hidden.</small></span></label>{isGift && <div className="gift-fields"><div className="form-grid"><label className="floating-field"><input required placeholder=" " /><span>Recipient name</span></label><label className="floating-field"><input required placeholder=" " type="tel" /><span>Recipient phone</span></label></div><label className="floating-field floating-textarea"><textarea maxLength="300" placeholder=" " rows="3" /><span>Gift message · max 300 characters</span></label><label className="gift-option"><input type="checkbox" /><span className="checkbox" /><span>Hide my name from the recipient</span></label><label className="gift-option"><input type="checkbox" /><span className="checkbox" /><span>Add gift wrap · {formatINR(storeSettings.giftWrapPrice)}</span></label></div>}<div className="consent-row"><span className="checkbox is-checked"><Check size={12} /></span><span>I agree to the <Link to="/pages/terms-and-conditions">Terms</Link> and <Link to="/pages/privacy-policy">Privacy Policy</Link>.</span></div></div>;
+  const setField = (k, v) => setContact({ ...contact, [k]: v });
+  return <div className="checkout-section"><p className="form-step">01 / 04</p><h2>Where should we send the little update?</h2><p className="checkout-subtitle">We’ll use this to share your order confirmation and delivery note.</p><div className="form-grid"><label className="floating-field"><input required placeholder=" " value={contact.name || user?.name || ''} onChange={(e) => setField('name', e.target.value)} /><span>Full name</span></label><label className="floating-field"><input required placeholder=" " value={contact.phone || user?.phone || ''} onChange={(e) => setField('phone', e.target.value)} /><span>Phone number · 10-digit Indian mobile</span></label></div><label className="floating-field"><input required placeholder=" " value={contact.email || user?.email || ''} onChange={(e) => setField('email', e.target.value)} /><span>Email address</span></label><label className="floating-field floating-textarea"><textarea placeholder=" " rows="3" value={contact.note || ''} onChange={(e) => setField('note', e.target.value)} /><span>Any note for us?</span></label><label className="gift-toggle"><input type="checkbox" checked={!!contact.isGift} onChange={(event) => setField('isGift', event.target.checked)} /><span className="checkbox">{contact.isGift && <Check size={12} />}</span><span><strong>It’s a gift</strong><small>Add a message for the recipient and keep the sender name hidden.</small></span></label>{contact.isGift && <div className="gift-fields"><div className="form-grid"><label className="floating-field"><input required placeholder=" " /><span>Recipient name</span></label><label className="floating-field"><input required placeholder=" " type="tel" /><span>Recipient phone</span></label></div><label className="floating-field floating-textarea"><textarea maxLength="300" placeholder=" " rows="3" /><span>Gift message · max 300 characters</span></label><label className="gift-option"><input type="checkbox" /><span className="checkbox" /><span>Hide my name from the recipient</span></label><label className="gift-option"><input type="checkbox" /><span className="checkbox" /><span>Add gift wrap · {formatINR(storeSettings.giftWrapPrice)}</span></label></div>}<div className="consent-row"><span className="checkbox is-checked"><Check size={12} /></span><span>I agree to the <Link to="/pages/terms-and-conditions">Terms</Link> and <Link to="/pages/privacy-policy">Privacy Policy</Link>.</span></div></div>;
 }
 
-function CheckoutDelivery() {
-  const [area, setArea] = useState(deliveryAreas[0]);
-  const [method, setMethod] = useState('campus');
-  const other = area === 'Other location in Muradnagar';
-  return <div className="checkout-section"><p className="form-step">02 / 04</p><h2>How should your order find you?</h2><p className="checkout-subtitle">We currently deliver only in Muradnagar. More areas coming soon!</p><label className="select-field"><span>Delivery area</span><select value={area} onChange={(event) => setArea(event.target.value)}>{deliveryAreas.map((item) => <option key={item}>{item}</option>)}</select><ChevronDown size={15} /></label>{other && <div className="manual-location-card"><MapPin size={18} /><div><strong>Manual location request</strong><span>Type a Muradnagar place or landmark. Your order can be created while the studio reviews the location and fee.</span></div></div>}{other && <div className="form-grid"><label className="floating-field"><input required placeholder=" " /><span>Place / landmark in Muradnagar</span></label><label className="floating-field"><input required placeholder=" " type="tel" /><span>Contact phone</span></label></div>}<div className="delivery-methods"><button className={`delivery-method ${method === 'campus' ? 'is-selected' : ''}`} onClick={() => setMethod('campus')}><Package size={19} /><span><strong>Campus handover</strong><small>KIET: Main Gate, Canteen, Library or Hostel Gate · Free</small></span>{method === 'campus' && <Check size={16} />}</button><button className={`delivery-method ${method === 'home' ? 'is-selected' : ''}`} onClick={() => setMethod('home')}><Truck size={19} /><span><strong>Home delivery</strong><small>Within listed Muradnagar areas · ₹50 or free above ₹1,000</small></span>{method === 'home' && <Check size={16} />}</button></div><div className="form-grid"><label className="select-field"><span>{method === 'campus' ? 'Handover spot' : 'Delivery slot'}</span><select><option>{method === 'campus' ? 'Main Gate' : deliverySlots[2].label}</option>{method === 'campus' && <><option>Canteen</option><option>Library</option><option>Hostel Gate</option></>}{method === 'home' && <option>7 to 9 PM · Home delivery</option>}</select><ChevronDown size={15} /></label><label className="select-field"><span>Preferred date</span><select><option>09 Oct 2026 · available</option><option>10 Oct 2026 · available</option><option>11 Oct 2026 · available</option></select><CalendarDays size={15} /></label></div><div className="ready-by"><Clock3 size={17} /><span>Ready by <strong>09 Oct 2026</strong> based on your longest production time. Earlier dates are blocked.</span></div>{other && <p className="checkout-warning"><AlertCircle size={15} /> Location approval is pending. Production starts after admin approval unless the studio overrides it.</p>}</div>;
+function CheckoutDelivery({ delivery, setDelivery }) {
+  const setField = (k, v) => setDelivery({ ...delivery, [k]: v });
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  return <div className="checkout-section"><p className="form-step">02 / 04</p><h2>How should your order find you?</h2><p className="checkout-subtitle">We currently deliver only in Muradnagar. More areas coming soon!</p>
+<div className="delivery-methods"><button type="button" className={`delivery-method ${delivery.method === 'campus' ? 'is-selected' : ''}`} onClick={() => setField('method', 'campus')}><Package size={19} /><span><strong>Campus handover</strong><small>KIET / Muradnagar campus spot · Free</small></span>{delivery.method === 'campus' && <Check size={16} />}</button><button type="button" className={`delivery-method ${delivery.method === 'home' ? 'is-selected' : ''}`} onClick={() => setField('method', 'home')}><Truck size={19} /><span><strong>Home delivery</strong><small>Local Muradnagar address · ₹50 or free above ₹1,000</small></span>{delivery.method === 'home' && <Check size={16} />}</button></div>
+<div className="form-grid"><label className="floating-field"><input required placeholder=" " value={delivery.pickupLocation} onChange={(e) => setField('pickupLocation', e.target.value.trim())} /><span>{delivery.method === 'campus' ? 'Pickup Location (campus gate / spot / landmark)' : 'Pickup Location (building / gate)'}</span></label><label className="floating-field"><input required placeholder=" " value={delivery.location} onChange={(e) => setField('location', e.target.value.trim())} /><span>{delivery.method === 'campus' ? 'Location (KIET, Muradnagar)' : 'Location (full address / area)'}</span></label></div>
+<div className="form-grid"><label className="floating-field"><input required type="date" min={todayStr} placeholder=" " value={delivery.pickupDate} onChange={(e) => setField('pickupDate', e.target.value)} /><span>Pickup Date</span></label><label className="floating-field"><input required placeholder=" " value={delivery.slotId || ''} onChange={(e) => setField('slotId', e.target.value.trim())} /><span>Delivery slot / contact phone</span></label></div>
+<div className="ready-by"><Clock3 size={17} /><span>Ready by will be updated by the studio team. You'll see it on your order tracker under <strong>Estimated Date</strong>.</span></div></div>;
 }
 
 function CheckoutPayment() {
@@ -452,7 +511,9 @@ function CheckoutPayment() {
   return <div className="checkout-section"><p className="form-step">03 / 04</p><h2>Choose a payment plan.</h2><p className="checkout-subtitle">{hasCustom ? 'Custom items require an online advance before production.' : 'The options below follow our server-side payment policy.'}</p><div className="payment-policy-note"><ShieldCheck size={17} /><span>{formatINR(total)} order · {hasCustom ? 'advance required for custom work' : total <= 300 ? 'COD or online available' : total <= 1000 ? 'COD needs a ₹100 advance' : '50% advance required above ₹1,000'}</span></div><div className="payment-options">{choices.map(({ title, detail, icon: PaymentIcon }, index) => <button className={`payment-option ${index === 0 ? 'is-selected' : ''}`} key={title}><div className="payment-icon"><PaymentIcon size={19} /></div><div><strong>{title}</strong><span>{detail}</span></div>{index === 0 && <Check size={16} />}</button>)}</div><div className="razorpay-strip"><span className="razorpay-mark">R</span><span>Secure payments by <strong>Razorpay</strong></span><Badge tone="icy">UPI · Cards · Netbanking</Badge></div></div>;
 }
 
-const CheckoutReview = () => <div className="checkout-section"><p className="form-step">04 / 04</p><h2>One last little look.</h2><p className="checkout-subtitle">Make sure everything feels right before you pay.</p><div className="review-summary"><div><span>Contact</span><strong>Ananya · +91 98 7654 3210</strong><button>Edit</button></div><div><span>Delivery</span><strong>KIET Group of Institutions · Main Gate</strong><button>Edit</button></div><div><span>Payment</span><strong>Advance online · balance at handover</strong><button>Edit</button></div><div><span>Gift</span><strong>Not a gift · surprise delivery off</strong><button>Edit</button></div></div><div className="agree-row"><span className="checkbox is-checked"><Check size={12} /></span><span>I understand handmade pieces may have tiny, lovely variations and custom pieces become non-returnable once production starts.</span></div></div>;
+function CheckoutReview({ contact, delivery }) {
+  return <div className="checkout-section"><p className="form-step">04 / 04</p><h2>One last little look.</h2><p className="checkout-subtitle">Make sure everything feels right before you pay.</p><div className="review-summary"><div><span>Contact</span><strong>{contact?.name || 'Customer'} · {contact?.phone || 'Phone'}</strong><button type="button">Edit</button></div><div><span>Delivery</span><strong>{(delivery?.pickupLocation || 'Pickup spot')} · {(delivery?.location || (delivery?.method === 'campus' ? 'KIET, Muradnagar' : 'Muradnagar address'))}</strong><button type="button">Edit</button></div><div><span>Pickup Date</span><strong>{delivery?.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : '—'}</strong><button type="button">Edit</button></div><div><span>Gift</span><strong>{contact?.isGift ? `Gift: ${contact.recipientName || 'recipient'}${contact.giftWrap ? ' · Gift wrap' : ''}` : 'Not a gift · surprise delivery off'}</strong><button type="button">Edit</button></div></div><div className="agree-row"><span className="checkbox is-checked"><Check size={12} /></span><span>I understand handmade pieces may have tiny, lovely variations and custom pieces become non-returnable once production starts.</span></div></div>;
+}
 
 function AccountPage() {
   const [tab, setTab] = useState('Orders');
@@ -465,8 +526,148 @@ function AccountPage() {
 }
 
 function TrackOrderPage() {
-  const [tracked, setTracked] = useState(false);
-  return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} /><main className="container track-page"><section className="track-card"><div className="track-sparkle">✦</div><p className="eyebrow">A little peek behind the curtain</p><h1>Track your <em>order.</em></h1><p>Enter your order number and phone number to see where your piece is in its journey.</p><form onSubmit={(event) => { event.preventDefault(); setTracked(true); }}><label className="floating-field"><input required placeholder=" " defaultValue={tracked ? 'EFU-1042' : ''} /><span>Order number</span></label><label className="floating-field"><input required placeholder=" " defaultValue={tracked ? '+91 98 7654 3210' : ''} /><span>Phone number</span></label><Button type="submit" className="full-button" icon={<Search size={16} />}>Find my order</Button></form>{tracked && <motion.div className="tracked-result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}><div className="tracked-result-head"><div><Badge tone="blush">IN PRODUCTION</Badge><h3>Petal Memory Box</h3><span>EFU-1042 · placed 02 Oct 2026</span></div><strong>{formatINR(1599)}</strong></div><Timeline /><div className="track-note"><Sparkles size={16} /><span>We’re adding the final little details. You’ll hear from us when it’s ready.</span></div></motion.div>}</section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  const { token, user } = useAuth();
+  const [orderId, setOrderId] = useState('');
+  const [tracked, setTracked] = useState(null);
+  const [error, setError] = useState('');
+  const [queryText, setQueryText] = useState('');
+  const [queries, setQueries] = useState([]);
+  const [queryMsg, setQueryMsg] = useState({ type: '', text: '' });
+  const live = useLive();
+  const products = live?.products?.length ? live.products : mockProducts;
+
+  const fetchQueries = async (id) => {
+    try {
+      const res = await fetch(`/api/orders/${id}/queries`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setQueries(data.queries || []);
+      }
+    } catch {}
+  };
+
+  const handleTrack = async (e) => {
+    e.preventDefault();
+    setError(''); setTracked(null); setQueries([]); setQueryMsg({ type: '', text: '' });
+    if (!orderId.trim()) return setError('Please enter your order number.');
+    try {
+      const res = await fetch(`/api/orders/${orderId.trim()}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.message || 'Order not found.');
+      }
+      const data = await res.json();
+      setTracked(data.order);
+      fetchQueries(orderId.trim());
+    } catch (err) { setError(err.message || 'Could not find that order.'); }
+  };
+
+  const handleQuery = async (e) => {
+    e.preventDefault();
+    setQueryMsg({ type: '', text: '' });
+    if (!queryText.trim()) return setQueryMsg({ type: 'error', text: 'Please type your question first.' });
+    try {
+      const res = await fetch(`/api/orders/${tracked.id}/queries`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: queryText.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to send query.');
+      setQueryText('');
+      setQueryMsg({ type: 'success', text: 'Your query has been sent. We will reply soon.' });
+      await fetchQueries(tracked.id);
+    } catch (err) { setQueryMsg({ type: 'error', text: err.message || 'Could not send query.' }); }
+  };
+
+  const est = tracked?.estimatedDate || tracked?.estimated_date;
+
+  return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} wishlistCount={[]} settings={live?.settings} /><main className="container track-page">
+    <section className="track-card">
+      <div className="track-sparkle">✦</div>
+      <p className="eyebrow">A little peek behind the curtain</p>
+      <h1>Track your <em>order.</em></h1>
+      <p>Enter your order number to see the estimated date set by our studio team.</p>
+      <form onSubmit={handleTrack} style={{ display: 'grid', gap: 14 }}>
+        <label className="floating-field">
+          <input required placeholder=" " value={orderId} onChange={(e) => setOrderId(e.target.value)} />
+          <span>Order number</span>
+        </label>
+        {error && <div style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><AlertCircle size={14} />{error}</div>}
+        <Button type="submit" className="full-button" icon={<Search size={16} />}>Find my order</Button>
+      </form>
+
+      {tracked && <motion.div className="tracked-result" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="tracked-result-head">
+          <div>
+            <h3>{tracked.items?.[0]?.productName || 'Your handmade piece'}</h3>
+            <span>{tracked.id} · placed {new Date(tracked.createdAt || tracked.created_at || Date.now()).toLocaleDateString()}</span>
+          </div>
+          <strong>{formatINR(Number(tracked.total || 0))}</strong>
+        </div>
+
+        <GlassCard style={{ marginTop: 18, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(62,142,126,.1)', color: '#3e8e7e', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <CalendarDays size={18} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p className="eyebrow" style={{ marginBottom: 4 }}>Estimated Date</p>
+              <h2 style={{ margin: 0, fontSize: 20, fontFamily: "'Fraunces', serif" }}>
+                {est ? new Date(est).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Not updated yet'}
+              </h2>
+              <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: 13 }}>
+                {est ? 'Our studio team has set the estimated ready / delivery date above. Thank you for your patience as we craft your piece by hand.' : 'The studio has not yet set an estimated date. They will update this as soon as they review your order — usually within 24 hours.'}
+              </p>
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* Past queries & replies */}
+        {queries.length > 0 && (
+          <div style={{ marginTop: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <p className="eyebrow" style={{ margin: 0 }}>Your past queries</p>
+              <Badge tone="icy">{queries.length}</Badge>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {queries.map((q) => (
+                <div key={q.id} style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(90,63,86,.04)', border: '1px solid rgba(90,63,86,.08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <small style={{ fontSize: 11, color: 'var(--muted)' }}>{new Date(q.createdAt || q.created_at).toLocaleString()}</small>
+                    <Badge tone={q.status === 'REPLIED' ? 'icy' : 'soft'}>{q.status === 'REPLIED' ? 'Replied' : 'Pending'}</Badge>
+                  </div>
+                  <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ink)' }}><strong>You:</strong> {q.message}</p>
+                  {q.adminReply && <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(62,142,126,.08)', marginTop: 8 }}><small style={{ color: '#3e8e7e', fontSize: 11, fontWeight: 600 }}>Studio reply · {new Date(q.repliedAt || q.replied_at || Date.now()).toLocaleDateString()}</small><p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink)' }}>{q.adminReply}</p></div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ask a Query box */}
+        <div style={{ marginTop: 22, paddingTop: 22, borderTop: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(197,90,131,.1)', color: '#b24d76', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <MessageCircle size={16} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Fraunces', serif" }}>Ask a Query</h3>
+              <p style={{ margin: '2px 0 0', color: 'var(--muted)', fontSize: 12.5 }}>
+                Questions about preparation progress, packing details, delivery timeline, customization tweaks, or anything else about your order — our team typically replies within 24 hours on business days.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={handleQuery} style={{ display: 'grid', gap: 10 }}>
+            <label className="floating-field floating-textarea">
+              <textarea required placeholder=" " rows={3} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
+              <span>Type your question about this order…</span>
+            </label>
+            {queryMsg.text && <div style={{ padding: '8px 12px', borderRadius: 10, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, background: queryMsg.type === 'error' ? 'rgba(197,90,131,.1)' : 'rgba(62,142,126,.1)', border: `1px solid ${queryMsg.type === 'error' ? 'rgba(197,90,131,.25)' : 'rgba(62,142,126,.25)'}`, color: queryMsg.type === 'error' ? '#c55a83' : '#3e8e7e' }}>{queryMsg.type === 'error' ? <AlertCircle size={13} /> : <Check size={13} />}{queryMsg.text}</div>}
+            <Button type="submit" className="full-button" icon={<Send size={14} />}>Send query to studio</Button>
+          </form>
+        </div>
+      </motion.div>}
+    </section>
+  </main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function AboutPage() {
@@ -996,9 +1197,193 @@ function AdminCategoriesPanel() {
   </div>;
 }
 
+function AdminOrdersPanel() {
+  const adminToken = localStorage.getItem('efu_admin_token') || '';
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  const [search, setSearch] = useState('');
+  const [editingEst, setEditingEst] = useState({});
+
+  const req = async (method, url, body) => {
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || `Failed (${res.status})`);
+    return data;
+  };
+  const refresh = async () => {
+    setLoading(true);
+    try { const r = await req('GET', '/api/admin/orders'); setOrders(r.orders || []); }
+    catch (err) { setMsg({ type: 'error', text: err.message || 'Failed to load orders.' }); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  const saveEstimatedDate = async (orderId) => {
+    const val = editingEst[orderId];
+    try {
+      await req('PATCH', `/api/admin/orders/${orderId}/estimated-date`, { estimatedDate: val || null });
+      setMsg({ type: 'success', text: `Updated estimated date for ${orderId}.` });
+      setOrders((list) => list.map((o) => o.id === orderId ? { ...o, estimatedDate: val || null, estimated_date: val || null } : o));
+      setEditingEst((e) => { const n = { ...e }; delete n[orderId]; return n; });
+    } catch (err) { setMsg({ type: 'error', text: err.message || 'Save failed.' }); }
+  };
+
+  const filtered = orders.filter((o) => !search || `${o.id} ${o.customer?.name || ''} ${o.customer?.phone || ''}`.toLowerCase().includes(search.toLowerCase()));
+
+  return <div className="ops-section">
+    <div className="ops-toolbar">
+      <span className="ops-toolbar-note"><Package size={15} /> {orders.length} order{orders.length === 1 ? '' : 's'} · set estimated date for each order below</span>
+      <div style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+        <div className="global-search" style={{ width: 280 }}><Search size={14} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Order, name, phone…" /></div>
+        <button className="small-link" onClick={refresh}><RefreshCw size={13} /> Refresh</button>
+      </div>
+    </div>
+    {msg.text && (
+      <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+        background: msg.type === 'error' ? 'rgba(197,90,131,.1)' : 'rgba(62,142,126,.1)',
+        border: `1px solid ${msg.type === 'error' ? 'rgba(197,90,131,.25)' : 'rgba(62,142,126,.25)'}`,
+        color: msg.type === 'error' ? '#c55a83' : '#3e8e7e' }}>
+        {msg.type === 'error' ? <AlertCircle size={15} /> : <Check size={15} />}
+        <span>{msg.text}</span>
+      </div>
+    )}
+    <GlassCard className="ops-table-card">
+      <div className="admin-card-heading">
+        <div><p className="eyebrow">Order control</p><h2>Set estimated dates per order</h2></div>
+      </div>
+      {loading ? <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading orders…</div> :
+        filtered.length ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {filtered.map((order) => {
+              const cust = order.customer || {};
+              const deliv = order.delivery || {};
+              const currentEst = editingEst[order.id] !== undefined ? editingEst[order.id] : (order.estimatedDate || order.estimated_date || '');
+              return <div key={order.id} style={{ padding: '14px 16px', borderRadius: 14, border: '1px solid rgba(90,63,86,.1)', background: '#fff' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 2fr) minmax(120px, 1fr) 220px 180px', gap: 14, alignItems: 'center' }}>
+                  <div>
+                    <strong style={{ color: 'var(--ink)', fontSize: 14 }}>{order.id}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{cust.name || '—'} · {cust.phone || cust.email || '—'}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{deliv.method === 'home' ? 'Home delivery' : 'Campus handover'} · {deliv.pickupDate || deliv.pickup_date || 'No pickup date'}</div>
+                  </div>
+                  <Badge tone={['DELIVERED','PAID','CONFIRMED'].includes(order.status) ? 'icy' : 'blush'}>{order.status}</Badge>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="date" value={currentEst ? new Date(currentEst).toISOString().split('T')[0] : ''}
+                      onChange={(e) => setEditingEst({ ...editingEst, [order.id]: e.target.value })}
+                      style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)', fontSize: 13 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    {(editingEst[order.id] !== undefined || !currentEst) && (
+                      <button className="button button-mini" onClick={() => saveEstimatedDate(order.id)}>Save</button>
+                    )}
+                    {currentEst && editingEst[order.id] === undefined && (
+                      <Badge tone="icy">{new Date(currentEst).toLocaleDateString()}</Badge>
+                    )}
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        ) : <EmptyState title="No orders yet" body="Orders placed through checkout will appear here." />
+      }
+    </GlassCard>
+  </div>;
+}
+
+function AdminOrderQueriesPanel() {
+  const adminToken = localStorage.getItem('efu_admin_token') || '';
+  const [queries, setQueries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  const [replies, setReplies] = useState({});
+
+  const req = async (method, url, body) => {
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || `Failed (${res.status})`);
+    return data;
+  };
+  const refresh = async () => {
+    setLoading(true);
+    try { const r = await req('GET', '/api/admin/order-queries'); setQueries(r.queries || []); }
+    catch (err) { setMsg({ type: 'error', text: err.message || 'Failed to load queries.' }); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  const sendReply = async (qid) => {
+    const text = String(replies[qid] || '').trim();
+    if (!text) return;
+    try {
+      const r = await req('PATCH', `/api/admin/order-queries/${qid}/reply`, { reply: text });
+      setMsg({ type: 'success', text: `Reply sent for query on ${r.query?.orderId || qid}.` });
+      setQueries((list) => list.map((q) => q.id === qid ? { ...q, adminReply: r.query?.adminReply || text, repliedAt: r.query?.repliedAt || new Date().toISOString(), status: 'REPLIED' } : q));
+      setReplies((rr) => { const n = { ...rr }; delete n[qid]; return n; });
+    } catch (err) { setMsg({ type: 'error', text: err.message || 'Reply failed.' }); }
+  };
+
+  return <div className="ops-section">
+    <div className="ops-toolbar">
+      <span className="ops-toolbar-note"><MessageCircle size={15} /> {queries.length} order quer{queries.length === 1 ? 'y' : 'ies'} · customer questions about prep, packing, delivery, customization</span>
+      <button className="small-link" onClick={refresh}><RefreshCw size={13} /> Refresh</button>
+    </div>
+    {msg.text && (
+      <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+        background: msg.type === 'error' ? 'rgba(197,90,131,.1)' : 'rgba(62,142,126,.1)',
+        border: `1px solid ${msg.type === 'error' ? 'rgba(197,90,131,.25)' : 'rgba(62,142,126,.25)'}`,
+        color: msg.type === 'error' ? '#c55a83' : '#3e8e7e' }}>
+        {msg.type === 'error' ? <AlertCircle size={15} /> : <Check size={15} />}
+        <span>{msg.text}</span>
+      </div>
+    )}
+    {loading ? <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading queries…</div> :
+      queries.length ? (
+        <div style={{ display: 'grid', gap: 14 }}>
+          {queries.map((q) => (
+            <GlassCard key={q.id} style={{ padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div>
+                  <Badge tone={q.status === 'REPLIED' ? 'icy' : 'blush'}>{q.status || 'PENDING'}</Badge>
+                  <span style={{ marginLeft: 10, fontSize: 13, color: 'var(--muted)' }}>Order <strong style={{ color: 'var(--ink)' }}>{q.orderId || q.order_id}</strong> · user {q.userId || q.user_id || '—'}</span>
+                </div>
+                <small style={{ color: 'var(--muted)', fontSize: 11 }}>{new Date(q.createdAt || q.created_at || Date.now()).toLocaleString()}</small>
+              </div>
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(90,63,86,.04)', marginBottom: q.adminReply ? 10 : 14 }}>
+                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink)' }}><strong>Customer:</strong> {q.message}</p>
+              </div>
+              {q.adminReply && (
+                <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(62,142,126,.08)', marginBottom: 12 }}>
+                  <small style={{ color: '#3e8e7e', fontSize: 11, fontWeight: 600 }}>Your reply · {new Date(q.repliedAt || q.replied_at || Date.now()).toLocaleDateString()}</small>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink)' }}>{q.adminReply}</p>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                <textarea rows={2} value={replies[q.id] || ''} onChange={(e) => setReplies({ ...replies, [q.id]: e.target.value })}
+                  placeholder="Reply to this customer query (about preparation, packing, delivery, customization, etc.)…"
+                  style={{ width: '100%', resize: 'vertical', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)', fontSize: 13, fontFamily: 'inherit' }} />
+                <button className="button button-mini" onClick={() => sendReply(q.id)} disabled={!String(replies[q.id] || '').trim()}>
+                  <Send size={13} /> Send reply
+                </button>
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      ) : <EmptyState title="No order queries yet" body="Customer questions sent from the Track Order page will appear here." />
+    }
+  </div>;
+}
+
 function AdminOpsPanel({ tab }) {
   if (tab === 'Products') return <AdminProductsPanel />;
   if (tab === 'Categories') return <AdminCategoriesPanel />;
+  if (tab === 'Orders') return <AdminOrdersPanel />;
+  if (tab === 'Order Queries') return <AdminOrderQueriesPanel />;
   if (tab === 'Orders') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Today’s deliveries</button><button>Payment pending</button><button>Location approvals pending</button><button><Download size={14} /> Export CSV</button></div><div className="ops-attention-grid">{adminNeedsAttention.map((item) => <GlassCard className="attention-card" key={item.label}><Badge tone={item.tone}>{item.label}</Badge><strong>{item.detail}</strong><div className="attention-actions"><button>Open detail</button><button className="icon-button"><PhoneCall size={14} /></button></div></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Order control</p><h2>Search, approve, update</h2></div><div className="global-search"><Search size={15} /><input placeholder="Order, phone, name or request ID" /></div></div>{sampleOrders.map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.customer} · {order.item}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge><span>{order.locationApproval === 'PENDING' ? 'Location pending' : 'KIET · Main Gate'}</span><button className="small-link">Update status <ChevronDown size={13} /></button></div>)}</GlassCard></div>;
   if (tab === 'Custom Requests') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Awaiting my quote</button><button>Quote expiring soon</button><button><MessageCircle size={14} /> WhatsApp customer</button></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Quote workflow</p><h2>Requests needing a reply</h2></div><Button variant="secondary" icon={<Plus size={15} />}>New quote</Button></div>{sampleRequests.map((request) => <div className="ops-request-row" key={request.id}><img src={request.image} alt="" /><div><strong>{request.id} · {request.title}</strong><span>{request.customer} · {request.budget} · needed by {request.neededBy}</span></div><Badge tone={request.status === 'QUOTE SENT' ? 'blush' : 'soft'}>{request.status}</Badge><div className="row-actions"><button>Ask customer</button><button className="button button-mini">Send quote</button></div></div>)}</GlassCard></div>;
   if (tab === 'Delivery Areas' || tab === 'Delivery Slots') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><MapPin size={15} /> Muradnagar only · manual locations do not block order creation</span><Button variant="secondary" icon={<Plus size={15} />}>Add area</Button></div><div className="ops-card-grid">{deliveryAreas.map((area, index) => <GlassCard className="area-card" key={area}><div className="area-card-top"><Badge tone={index === 0 ? 'icy' : 'soft'}>{index === 0 ? 'CAMPUS' : area.startsWith('Other') ? 'MANUAL' : 'AREA'}</Badge><button className="icon-button"><Edit3 size={14} /></button></div><h3>{area}</h3><p>{index === 0 ? 'Main Gate · Canteen · Library · Hostel Gate' : area.startsWith('Other') ? 'Approval required · fee set by admin' : 'Active delivery area · ₹50 or free above ₹1,000'}</p></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Admin-editable slots</p><h2>Delivery slots</h2></div><Button variant="secondary" icon={<Plus size={15} />}>Add slot</Button></div>{deliverySlots.map((slot) => <div className="ops-order-row" key={slot.id}><div><strong>{slot.label}</strong><span>{slot.area} · {slot.days}</span></div><Badge tone="icy">{slot.remaining} spots left</Badge><button className="small-link">Edit <Edit3 size={13} /></button></div>)}</GlassCard></div>;
@@ -1125,7 +1510,7 @@ function AdminPage() {
     return <AdminLoginPage onLoginSuccess={(tok, user) => { setToken(tok); setAdminUser(user); }} />;
   }
 
-  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Custom Requests', MessageCircle], ['Products', Palette], ['Categories', Tag], ['Discounts', Zap], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ['Team', UserPlus], ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
+  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Order Queries', MessageCircle], ['Custom Requests', MessageCircle], ['Products', Palette], ['Categories', Tag], ['Discounts', Zap], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ['Team', UserPlus], ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
   return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>TEST MODE · All payment actions are safe to preview</strong><span>Razorpay test key detected · live payments remain disabled until launch configuration.</span></div><Badge tone="icy">OPEN</Badge></div><div className="admin-stat-grid"><GlassCard><span className="stat-label">Orders today</span><strong>12</strong><small className="stat-up">↑ 18% this week</small></GlassCard><GlassCard><span className="stat-label">Pending quotes</span><strong>08</strong><small>3 need your reply</small></GlassCard><GlassCard><span className="stat-label">In production</span><strong>14</strong><small>Across 7 categories</small></GlassCard><GlassCard><span className="stat-label">Revenue</span><strong>₹28.4k</strong><small className="stat-up">↑ 12% this month</small></GlassCard></div><div className="admin-main-grid"><GlassCard className="revenue-card"><div className="admin-card-heading"><div><p className="eyebrow">A gentle upward trend</p><h2>Revenue overview</h2></div><select><option>Last 30 days</option><option>Last 7 days</option></select></div><div className="chart"><div className="chart-grid"><span /><span /><span /><span /></div><svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Revenue sparkline"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#FFAFCC" stopOpacity=".42" /><stop offset="100%" stopColor="#FFAFCC" stopOpacity="0" /></linearGradient></defs><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23 L600,180 L0,180 Z" fill="url(#chartFill)" /><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23" fill="none" stroke="#C55A83" strokeWidth="3" strokeLinecap="round" /></svg><div className="chart-labels"><span>01 Sep</span><span>15 Sep</span><span>30 Sep</span></div></div></GlassCard><GlassCard className="requests-card"><div className="admin-card-heading"><div><p className="eyebrow">Needs attention</p><h2>Keep things moving</h2></div><button className="small-link" onClick={() => setTab('Orders')}>View all <ArrowUpRight size={14} /></button></div>{adminNeedsAttention.map((item) => <div className="admin-request" key={item.label}><div className="attention-icon"><AlertCircle size={15} /></div><div><strong>{item.label}</strong><span>{item.detail}</span></div><Badge tone={item.tone}>Open</Badge></div>)}</GlassCard></div><GlassCard className="orders-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Keep things moving</p><h2>Recent orders</h2></div><button className="small-link" onClick={() => setTab('Orders')}>Manage orders <ArrowUpRight size={14} /></button></div><div className="orders-table"><div className="orders-table-row orders-table-head"><span>Order</span><span>Customer</span><span>Piece</span><span>Status</span><span>Total</span></div>{sampleOrders.map((order) => <div className="orders-table-row" key={order.id}><span><strong>{order.id}</strong><small>{order.date}</small></span><span>{order.customer}</span><span>{order.item}</span><span><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge></span><span><strong>{formatINR(order.total)}</strong></span></div>)}</div></GlassCard></> : <AdminOpsPanel tab={tab} />}</section></main></GradientBackground>;
 }
 
@@ -1186,31 +1571,33 @@ function App() {
       <LiveDataProvider>
         <AnimatePresence mode="wait">
           <Routes>
-            {/* Public Storefront Routes */}
+            {/* Public Storefront Routes - only Home is public */}
             <Route path="/" element={<HomePage />} />
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/category/:slug" element={<CategoryRoute />} />
-            <Route path="/occasion/:occasion" element={<OccasionRoute />} />
-            <Route path="/product/:slug" element={<ProductPage />} />
-            <Route path="/custom-request" element={<CustomRequestPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/track-order" element={<TrackOrderPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/pages/:slug" element={<ContentPage />} />
 
-            {/* Authentication Routes */}
+            {/* Authentication Routes - public */}
             <Route path="/login" element={<AuthPage initialMode="login" />} />
             <Route path="/signup" element={<AuthPage initialMode="signup" />} />
             <Route path="/forgot-password" element={<AuthPage initialMode="forgot" />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+            {/* Protected Storefront Routes */}
+            <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+            <Route path="/category/:slug" element={<ProtectedRoute><CategoryRoute /></ProtectedRoute>} />
+            <Route path="/occasion/:occasion" element={<ProtectedRoute><OccasionRoute /></ProtectedRoute>} />
+            <Route path="/product/:slug" element={<ProtectedRoute><ProductPage /></ProtectedRoute>} />
+            <Route path="/custom-request" element={<ProtectedRoute><CustomRequestPage /></ProtectedRoute>} />
+            <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
+            <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+            <Route path="/track-order" element={<ProtectedRoute><TrackOrderPage /></ProtectedRoute>} />
+            <Route path="/about" element={<ProtectedRoute><AboutPage /></ProtectedRoute>} />
+            <Route path="/pages/:slug" element={<ProtectedRoute><ContentPage /></ProtectedRoute>} />
+
             {/* Customer Account Routes (Protected) */}
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
             <Route path="/account/requests/:id" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
 
-            {/* Admin Desk Route (Protected for the 2 authorized owners) */}
-            <Route path="/admin" element={<AdminPage />} />
+            {/* Admin Desk Route (Protected) */}
+            <Route path="/admin" element={<ProtectedRoute publicRoute={false} requireAdmin><AdminPage /></ProtectedRoute>} />
 
             {/* Catch-all Route */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -161,6 +161,7 @@ export default function AuthPage({ initialMode = 'login' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -201,6 +202,19 @@ export default function AuthPage({ initialMode = 'login' }) {
       await auth.register({ name, email, password, phone });
       navigate(from, { replace: true });
     } catch (err) { setError(err.message || 'Sign up failed.'); }
+  };
+
+  const handleAdminRegister = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!name.trim() || !email.trim() || !password) return setError('Name, email and password are required.');
+    if (password.length < 6) return setError('Password must be at least 6 characters.');
+    if (password !== confirm) return setError('Passwords do not match.');
+    if (!adminPassword) return setError('Admin signup password is required.');
+    try {
+      await auth.registerAdmin({ name, email, password, phone, adminPassword });
+      navigate(from, { replace: true });
+    } catch (err) { setError(err.message || 'Admin signup failed.'); }
   };
 
   const handleForgot = async (e) => {
@@ -273,25 +287,44 @@ export default function AuthPage({ initialMode = 'login' }) {
                 )}
 
                 {mode === 'signup' && (
-                  <form onSubmit={handleRegister} style={{ display: 'grid', gap: 14 }}>
-                    <Field label="Full name" icon={Check} value={name} onChange={setName} autoComplete="name" />
-                    <Field type="email" label="Email address" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
-                    <Field type="tel" label="Phone (optional)" icon={ShieldCheck} value={phone} onChange={setPhone} autoComplete="tel" required={false} />
-                    <Field type="password" label="Password" icon={LockKeyhole} value={password} onChange={setPassword} autoComplete="new-password" />
-                    <Field type="password" label="Confirm password" icon={LockKeyhole} value={confirm} onChange={setConfirm} autoComplete="new-password" />
-                    <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 10, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}>
-                      <input type="checkbox" required style={{ marginTop: 2, accentColor: '#c55a83' }} />
-                      <span>I agree to the <a href="/pages/terms-and-conditions" style={{ color: '#c55a83', textDecoration: 'none' }}>Terms</a> and <a href="/pages/privacy-policy" style={{ color: '#c55a83', textDecoration: 'none' }}>Privacy Policy</a>.</span>
-                    </label>
-                    <PrimaryButton type="submit" loading={auth.loading} icon={<ArrowRight size={16} />}>Create my account</PrimaryButton>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
-                      <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
+                  <div>
+                    <form onSubmit={handleRegister} style={{ display: 'grid', gap: 14 }}>
+                      <Field label="Full name" icon={Check} value={name} onChange={setName} autoComplete="name" />
+                      <Field type="email" label="Email address" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
+                      <Field type="tel" label="Phone (optional)" icon={ShieldCheck} value={phone} onChange={setPhone} autoComplete="tel" required={false} />
+                      <Field type="password" label="Password" icon={LockKeyhole} value={password} onChange={setPassword} autoComplete="new-password" />
+                      <Field type="password" label="Confirm password" icon={LockKeyhole} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+                      <label style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 10, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}>
+                        <input type="checkbox" required style={{ marginTop: 2, accentColor: '#c55a83' }} />
+                        <span>I agree to the <a href="/pages/terms-and-conditions" style={{ color: '#c55a83', textDecoration: 'none' }}>Terms</a> and <a href="/pages/privacy-policy" style={{ color: '#c55a83', textDecoration: 'none' }}>Privacy Policy</a>.</span>
+                      </label>
+                      <PrimaryButton type="submit" loading={auth.loading} icon={<ArrowRight size={16} />}>Create my account</PrimaryButton>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
+                        <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
+                      </div>
+                      <GoogleButton label="Sign up with Google" loading={googleLoading} onClick={() => handleGoogle(true)} />
+                      <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--muted)' }}>
+                        Already have an account? <button type="button" onClick={() => setMode('login')} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: '#c55a83', fontWeight: 600 }}>Sign in instead</button>
+                      </div>
+                    </form>
+
+                    <div style={{ marginTop: 28, paddingTop: 24, borderTop: '1px dashed rgba(90,63,86,.15)' }}>
+                      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: 'rgba(90,63,86,.06)', fontSize: 11, color: '#5a3f56', fontWeight: 600, letterSpacing: .3 }}>
+                          <ShieldCheck size={12} /> STUDIO TEAM ONLY
+                        </div>
+                      </div>
+                      <form onSubmit={handleAdminRegister} style={{ display: 'grid', gap: 12 }}>
+                        <Field label="Admin full name" icon={Check} value={name} onChange={setName} autoComplete="name" />
+                        <Field type="email" label="Admin email" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
+                        <Field type="tel" label="Admin phone (optional)" icon={ShieldCheck} value={phone} onChange={setPhone} autoComplete="tel" required={false} />
+                        <Field type="password" label="Admin account password" icon={LockKeyhole} value={password} onChange={setPassword} autoComplete="new-password" />
+                        <Field type="password" label="Confirm admin password" icon={LockKeyhole} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+                        <Field type="password" label="Studio admin signup password" icon={ShieldCheck} value={adminPassword} onChange={setAdminPassword} />
+                        <PrimaryButton type="submit" loading={auth.loading} icon={<ShieldCheck size={16} />}>Create studio admin account</PrimaryButton>
+                      </form>
                     </div>
-                    <GoogleButton label="Sign up with Google" loading={googleLoading} onClick={() => handleGoogle(true)} />
-                    <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--muted)' }}>
-                      Already have an account? <button type="button" onClick={() => setMode('login')} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: '#c55a83', fontWeight: 600 }}>Sign in instead</button>
-                    </div>
-                  </form>
+                  </div>
                 )}
 
                 {mode === 'forgot' && (

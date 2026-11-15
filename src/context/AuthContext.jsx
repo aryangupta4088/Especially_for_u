@@ -46,11 +46,24 @@ export function AuthProvider({ children }) {
   const register = useCallback(async ({ name, email, password, phone }) => {
     setLoading(true);
     try {
-      const data = await request('/api/auth/register', { name, email, password, phone }, { includeAuth: false });
+      return await request('/api/auth/register', { name, email, password, phone }, { includeAuth: false });
+    } finally { setLoading(false); }
+  }, [request]);
+
+  const verifyEmail = useCallback(async ({ email, code }) => {
+    setLoading(true);
+    try {
+      const data = await request('/api/auth/verify-email', { email, code }, { includeAuth: false });
       persist(data.token, data.user);
       return data;
     } finally { setLoading(false); }
   }, [request, persist]);
+
+  const resendVerification = useCallback(async ({ email }) => {
+    setLoading(true);
+    try { return await request('/api/auth/resend-verification', { email }, { includeAuth: false }); }
+    finally { setLoading(false); }
+  }, [request]);
 
   const registerAdmin = useCallback(async ({ name, email, password, phone, adminPassword }) => {
     setLoading(true);
@@ -70,14 +83,15 @@ export function AuthProvider({ children }) {
     } finally { setLoading(false); }
   }, [request, persist]);
 
-  const loginWithGoogle = useCallback(async (payload) => {
+  const loginAdmin = useCallback(async ({ email, password }) => {
     setLoading(true);
     try {
-      const data = await request('/api/auth/google', payload, { includeAuth: false });
-      persist(data.token, data.user);
+      const data = await request('/api/admin/login', { email, password }, { includeAuth: false });
+      localStorage.setItem('efu_admin_token', data.token);
+      localStorage.setItem('efu_admin_user', JSON.stringify(data.admin));
       return data;
     } finally { setLoading(false); }
-  }, [request, persist]);
+  }, [request]);
 
   const logout = useCallback(() => {
     persist('', null);
@@ -126,14 +140,16 @@ export function AuthProvider({ children }) {
     isAdmin,
     login,
     register,
+    verifyEmail,
+    resendVerification,
     registerAdmin,
-    loginWithGoogle,
+    loginAdmin,
     logout,
     forgotPassword,
     resetPassword,
     fetchMe,
     request,
-  }), [token, user, loading, authenticated, isAdmin, login, register, registerAdmin, loginWithGoogle, logout, forgotPassword, resetPassword, fetchMe, request]);
+  }), [token, user, loading, authenticated, isAdmin, login, register, verifyEmail, resendVerification, registerAdmin, loginAdmin, logout, forgotPassword, resetPassword, fetchMe, request]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

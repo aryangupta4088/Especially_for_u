@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
-import { catalogProducts, catalogCategories, catalogDeliveryAreas, catalogDeliverySlots, catalogStoreSettings, publicProduct } from './catalog.js';
+import { catalogDeliveryAreas, catalogDeliverySlots, catalogStoreSettings, publicProduct } from './catalog.js';
 import { getPool, getDatabaseMode } from './db.js';
 
 function clone(value) {
@@ -20,8 +20,12 @@ const memory = {
   notificationLogs: [],
   users: [],
   resetTokens: [],
-  products: clone(catalogProducts),
-  categories: clone(catalogCategories),
+  emailVerifications: {},
+  products: [],
+  reviews: [],
+  // The in-memory fallback mirrors the database. Keep it empty after a wipe;
+  // catalog fixtures must not appear as deletable records that do not exist.
+  categories: [],
 };
 
 function memoryRepository() {
@@ -36,6 +40,32 @@ function memoryRepository() {
     async getProduct(id) {
       const product = memory.products.find((p) => p.id === id);
       return product ? clone(product) : null;
+    },
+    async listReviews({ productId, status } = {}) {
+      return clone(memory.reviews
+        .filter((review) => (!productId || review.productId === productId) && (!status || review.status === status))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((review) => ({ ...review, productName: memory.products.find((product) => product.id === review.productId)?.name || '' })));
+    },
+    async createReview(review) {
+      if (memory.reviews.some((item) => item.productId === review.productId && item.userId === review.userId)) {
+        const error = new Error('You have already reviewed this product.'); error.code = 'ER_DUP_ENTRY'; throw error;
+      }
+      const saved = { ...clone(review), id: review.id || newEntityId('REV'), status: 'PENDING', createdAt: new Date().toISOString() };
+      memory.reviews.unshift(saved);
+      return clone(saved);
+    },
+    async updateReviewStatus(id, status) {
+      const review = memory.reviews.find((item) => item.id === id);
+      if (!review) return null;
+      review.status = status;
+      return clone(review);
+    },
+    async deleteReview(id) {
+      const index = memory.reviews.findIndex((item) => item.id === id);
+      if (index < 0) return false;
+      memory.reviews.splice(index, 1);
+      return true;
     },
     async createProduct(product) {
       const saved = { ...clone(product), id: product.id || newEntityId('P'), createdAt: new Date().toISOString() };
@@ -81,7 +111,7 @@ function memoryRepository() {
     async getPublicSettings() { return { ...clone(catalogStoreSettings), upiId: catalogStoreSettings.upiId || process.env.UPI_ID || '', upiQrImage: catalogStoreSettings.upiQrImage || process.env.UPI_QR_IMAGE_URL || '', paymentInstructions: catalogStoreSettings.paymentInstructions || 'Pay the requested amount by UPI. We will start after confirming it.' }; },
     async listDeliveryAreas() { return catalogDeliveryAreas.map((label, index) => ({ id: String(index + 1), label, areaType: index === 0 ? 'CAMPUS' : label.startsWith('Other') ? 'MANUAL' : 'LOCAL', fee: index === 0 ? 0 : 50, approvalRequired: label.startsWith('Other'), isActive: true })); },
     async listDeliverySlots() { return clone(catalogDeliverySlots); },
-    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, userId: order.userId || null, paidAmount: 0, paymentStatus: 'PENDING', estimatedDate: null, pickupDate: order.delivery?.pickupDate || null, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
+    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, userId: order.userId || null, total: Number(order.pricing?.total || 0), paidAmount: 0, balanceDue: Number(order.pricing?.total || 0), paymentStatus: 'PENDING', estimatedDate: null, pickupDate: order.delivery?.pickupDate || null, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
     async getOrder(id) { return memory.orders.find((order) => order.id === id) || null; },
     async getOrderWithItems(id) {
       const order = memory.orders.find((o) => o.id === id);
@@ -161,10 +191,6 @@ function memoryRepository() {
       if (!includeHash) delete out.passwordHash;
       return out;
     },
-    async getUserByGoogleId(googleId) {
-      const user = memory.users.find((u) => u.googleId === googleId);
-      return user ? clone(user) : null;
-    },
     async getUserById(id) {
       const user = memory.users.find((u) => u.id === id);
       if (!user) return null;
@@ -179,6 +205,10 @@ function memoryRepository() {
       return clone(user);
     },
     async listAdminUsers() { return clone(memory.users.filter((user) => ['OWNER', 'ADMIN', 'MANAGER', 'STAFF'].includes(String(user.role).toUpperCase())).map(({ passwordHash, ...user }) => user)); },
+    async getEmailVerification(email) { return memory.emailVerifications[email] ? clone(memory.emailVerifications[email]) : null; },
+    async saveEmailVerification(record) { memory.emailVerifications[record.email] = clone(record); return true; },
+    async incrementEmailVerificationAttempts(email) { const record = memory.emailVerifications[email]; if (!record) return false; record.attempts = Number(record.attempts || 0) + 1; return true; },
+    async deleteEmailVerification(email) { delete memory.emailVerifications[email]; return true; },
     async createPasswordResetToken(userId, tokenHash, expiresAt) {
       memory.resetTokens.unshift({ id: memory.resetTokens.length + 1, userId, tokenHash, expiresAt: expiresAt.toISOString ? expiresAt.toISOString() : expiresAt, usedAt: null, createdAt: new Date().toISOString() });
     },
@@ -280,6 +310,28 @@ function mysqlRepository(pool) {
       const [rows] = await pool.query(`SELECT * FROM products WHERE ${where.join(' AND ')} ORDER BY sort_order, name`, params);
       return rows.map((row) => publicProduct({ ...row, originalPrice: row.original_price, saleStartsAt: row.sale_starts_at, saleEndsAt: row.sale_ends_at, startingFrom: false, occasions: parseJson(row.occasions_json, []), options: parseJson(row.options_json, []), allowCustomRequest: Boolean(row.allow_custom_request), isMadeToOrder: Boolean(row.is_made_to_order), returnable: Boolean(row.returnable), customizable: Boolean(row.customizable), premium: false }));
     },
+    async listReviews({ productId, status } = {}) {
+      const where = []; const params = [];
+      if (productId) { where.push('r.product_id = ?'); params.push(productId); }
+      if (status) { where.push('r.status = ?'); params.push(status); }
+      const [rows] = await pool.query(`SELECT r.id, r.product_id AS productId, r.user_id AS userId, r.customer_name AS customerName, r.rating, r.comment, r.status, r.created_at AS createdAt, p.name AS productName, p.slug AS productSlug, p.image AS productImage FROM product_reviews r LEFT JOIN products p ON p.id = r.product_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY r.created_at DESC LIMIT 500`, params);
+      return rows;
+    },
+    async createReview(review) {
+      const id = review.id || newEntityId('REV');
+      await pool.query('INSERT INTO product_reviews (id,product_id,user_id,customer_name,rating,comment,status) VALUES (?,?,?,?,?,?,?)', [id, review.productId, review.userId, review.customerName, review.rating, review.comment, 'PENDING']);
+      const rows = await this.listReviews({ productId: review.productId });
+      return rows.find((item) => item.id === id) || null;
+    },
+    async updateReviewStatus(id, status) {
+      await pool.query('UPDATE product_reviews SET status = ? WHERE id = ?', [status, id]);
+      const rows = await this.listReviews();
+      return rows.find((item) => item.id === id) || null;
+    },
+    async deleteReview(id) {
+      const [result] = await pool.query('DELETE FROM product_reviews WHERE id = ?', [id]);
+      return result.affectedRows > 0;
+    },
     async listAdminProducts({ category, q } = {}) {
       const where = []; const params = [];
       if (category && category !== 'all') { where.push('category = ?'); params.push(category); }
@@ -295,7 +347,6 @@ function mysqlRepository(pool) {
     },
     async listCategories() {
       const [rows] = await pool.query('SELECT id, name, slug, eyebrow, description, image, size, sort_order AS sortOrder, is_active AS isActive FROM categories WHERE is_active = 1 ORDER BY sort_order, name');
-      if (rows.length === 0) return clone(catalogCategories);
       return rows;
     },
     async getCategory(id) {
@@ -403,14 +454,6 @@ function mysqlRepository(pool) {
       if (includeHash) out.passwordHash = row.password_hash;
       return out;
     },
-    async getUserByGoogleId(googleId) {
-      const [rows] = await pool.query('SELECT * FROM users WHERE google_id = ? LIMIT 1', [googleId]);
-      if (!rows[0]) return null;
-      return {
-        id: rows[0].id, email: rows[0].email, name: rows[0].name, phone: rows[0].phone, role: rows[0].role,
-        googleId: rows[0].google_id, avatarUrl: rows[0].avatar_url, isActive: Boolean(rows[0].is_active),
-      };
-    },
     async getUserById(id) {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
       if (!rows[0]) return null;
@@ -435,6 +478,22 @@ function mysqlRepository(pool) {
     async listAdminUsers() {
       const [rows] = await pool.query("SELECT id, email, name, phone, role, is_active AS isActive, created_at AS createdAt FROM users WHERE role IN ('OWNER','ADMIN','MANAGER','STAFF') ORDER BY created_at");
       return rows;
+    },
+    async getEmailVerification(email) {
+      const [rows] = await pool.query('SELECT email, name, phone, password_hash AS passwordHash, code_hash AS codeHash, expires_at AS expiresAt, attempts, last_sent_at AS lastSentAt FROM email_verification_requests WHERE email = ? LIMIT 1', [email]);
+      return rows[0] || null;
+    },
+    async saveEmailVerification(record) {
+      await pool.query('INSERT INTO email_verification_requests (email,name,phone,password_hash,code_hash,expires_at,attempts,last_sent_at) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name), phone=VALUES(phone), password_hash=VALUES(password_hash), code_hash=VALUES(code_hash), expires_at=VALUES(expires_at), attempts=VALUES(attempts), last_sent_at=VALUES(last_sent_at)', [record.email,record.name,record.phone,record.passwordHash,record.codeHash,record.expiresAt,record.attempts,record.lastSentAt]);
+      return true;
+    },
+    async incrementEmailVerificationAttempts(email) {
+      const [result] = await pool.query('UPDATE email_verification_requests SET attempts = attempts + 1 WHERE email = ?', [email]);
+      return result.affectedRows > 0;
+    },
+    async deleteEmailVerification(email) {
+      await pool.query('DELETE FROM email_verification_requests WHERE email = ?', [email]);
+      return true;
     },
     async createPasswordResetToken(userId, tokenHash, expiresAt) {
       await pool.query('INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?,?,?)', [userId, tokenHash, expiresAt]);
@@ -529,7 +588,7 @@ function mysqlRepository(pool) {
     },
 
     async listOrdersByUser(userId) {
-      const [rows] = await pool.query('SELECT id, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, total, payment_status AS paymentStatus, delivery_area AS deliveryArea, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
+      const [rows] = await pool.query('SELECT id, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, total, paid_amount AS paidAmount, balance_due AS balanceDue, payment_status AS paymentStatus, delivery_area AS deliveryArea, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
       return rows;
     },
 

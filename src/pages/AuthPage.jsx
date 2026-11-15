@@ -4,12 +4,6 @@ import { AlertCircle, ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, ShieldC
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const GoogleLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-    <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.4-1.6 4.1-5.5 4.1-3.3 0-6-2.7-6-6.2s2.7-6.2 6-6.2c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.3 12 2.3 6.9 2.3 2.7 6.5 2.7 11.9S6.9 21.5 12 21.5c6.9 0 9.5-4.8 9.5-7.3 0-.5 0-.9-.1-1.3H12z"/>
-  </svg>
-);
-
 function GradientShell({ children }) {
   return (
     <div className="page-bg page-auth" style={{ minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
@@ -127,27 +121,6 @@ function PrimaryButton({ children, loading, icon, onClick, type = 'button', disa
   );
 }
 
-function GoogleButton({ onClick, loading, label, disabled = false }) {
-  return (
-    <button
-      type="button"
-      disabled={loading || disabled}
-      onClick={onClick}
-      style={{
-        width: '100%', padding: '12px 18px', borderRadius: 14,
-        background: '#fff', border: '1px solid rgba(90,63,86,.18)',
-        color: 'var(--ink)', fontSize: 13.5, fontWeight: 500,
-        cursor: loading ? 'wait' : 'pointer',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        transition: 'all .15s ease',
-      }}
-    >
-      <GoogleLogo />
-      {loading ? 'Please wait…' : label}
-    </button>
-  );
-}
-
 export default function AuthPage({ initialMode = 'login' }) {
   const [mode, setMode] = useState(initialMode);
   useEffect(() => { setMode(initialMode); }, [initialMode]);
@@ -161,65 +134,31 @@ export default function AuthPage({ initialMode = 'login' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleClientId, setGoogleClientId] = useState('');
-  const [googleReady, setGoogleReady] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/auth/config').then((response) => response.json()).then((config) => setGoogleClientId(config.googleClientId || '')).catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (!googleClientId) return;
-    if (window.google?.accounts?.oauth2) { setGoogleReady(true); return; }
-    let script = document.querySelector('script[data-google-identity]');
-    if (!script) {
-      script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.dataset.googleIdentity = 'true';
-      document.head.appendChild(script);
-    }
-    const ready = () => setGoogleReady(Boolean(window.google?.accounts?.oauth2));
-    script.addEventListener('load', ready);
-    const timer = window.setInterval(ready, 250);
-    return () => { script.removeEventListener('load', ready); window.clearInterval(timer); };
-  }, [googleClientId]);
+  const [adminSignIn, setAdminSignIn] = useState(false);
 
   useEffect(() => { setError(''); setSuccess(''); }, [mode]);
   useEffect(() => {
-    if (auth.isAuthenticated && mode !== 'forgot') navigate(from, { replace: true });
-  }, [auth.isAuthenticated, navigate, from, mode]);
-
-  const handleGoogle = () => {
-    setError('');
-    if (!googleClientId) return setError('Google sign-in is not configured yet. Add GOOGLE_CLIENT_ID to the server settings.');
-    if (!window.google?.accounts?.oauth2) return setError('Google sign-in is still loading. Please try again in a moment.');
-    setGoogleLoading(true);
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: googleClientId,
-      scope: 'openid email profile',
-      callback: async (response) => {
-        try {
-          if (!response.access_token) throw new Error(response.error_description || 'Google sign-in was cancelled.');
-          await auth.loginWithGoogle({ accessToken: response.access_token });
-          navigate(from, { replace: true });
-        } catch (err) { setError(err.message || 'Google sign-in failed.'); }
-        finally { setGoogleLoading(false); }
-      },
-    });
-    tokenClient.requestAccessToken();
-  };
+    if (auth.isAuthenticated && mode !== 'forgot' && from !== '/admin' && !adminSignIn) navigate(from, { replace: true });
+  }, [auth.isAuthenticated, navigate, from, mode, adminSignIn]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(''); setSuccess('');
     try {
-      await auth.login({ email, password });
-      navigate(from, { replace: true });
-    } catch (err) { setError(err.message || 'Login failed.'); }
+      setAdminSignIn(true);
+      await auth.loginAdmin({ email, password });
+      navigate('/admin', { replace: true });
+    } catch {
+      try {
+        await auth.login({ email, password });
+        setAdminSignIn(false);
+        navigate(from, { replace: true });
+      } catch (err) { setAdminSignIn(false); setError(err.message || 'Invalid email or password.'); }
+    }
   };
 
   const handleRegister = async (e) => {
@@ -228,9 +167,26 @@ export default function AuthPage({ initialMode = 'login' }) {
     if (password.length < 6) return setError('Password must be at least 6 characters.');
     if (password !== confirm) return setError('Passwords do not match.');
     try {
-      await auth.register({ name, email, password, phone });
-      navigate(from, { replace: true });
+      const result = await auth.register({ name, email, password, phone });
+      setVerificationPending(true);
+      setSuccess(result.message || 'We sent a verification code to your email.');
     } catch (err) { setError(err.message || 'Sign up failed.'); }
+  };
+
+  const handleVerifyEmail = async (e) => {
+    e.preventDefault(); setError(''); setSuccess('');
+    try {
+      await auth.verifyEmail({ email, code: verificationCode });
+      navigate(from, { replace: true });
+    } catch (err) { setError(err.message || 'Could not verify that code.'); }
+  };
+
+  const handleResendCode = async () => {
+    setError(''); setSuccess('');
+    try {
+      const result = await auth.resendVerification({ email });
+      setSuccess(result.message || 'A new verification code was sent.');
+    } catch (err) { setError(err.message || 'Could not resend the code.'); }
   };
 
   const handleForgot = async (e) => {
@@ -291,21 +247,19 @@ export default function AuthPage({ initialMode = 'login' }) {
                       <Link to="/forgot-password" style={{ color: '#c55a83', fontSize: 12.5, textDecoration: 'none', fontWeight: 500 }}>Forgot password?</Link>
                     </div>
                     <PrimaryButton type="submit" loading={auth.loading} icon={<ArrowRight size={16} />}>Sign in</PrimaryButton>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
-                      <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
-                    </div>
-                    <GoogleButton label="Continue with Google" loading={googleLoading} disabled={!googleReady} onClick={handleGoogle} />
-                    {!googleClientId && <small style={{ color: 'var(--muted)', textAlign: 'center' }}>Google sign-in needs the site’s Google client ID.</small>}
-                    <div style={{ textAlign: 'center', marginTop: 20, padding: 12, borderRadius: 14, background: 'rgba(62,142,126,.06)', border: '1px solid rgba(62,142,126,.12)', fontSize: 12, color: '#3e8e7e', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-                      <ShieldCheck size={14} />
-                      <span>Studio admin? <Link to="/admin" style={{ color: '#3e8e7e', fontWeight: 600 }}>Open Studio Desk →</Link></span>
-                    </div>
+                    <p style={{ margin: '2px 0 0', textAlign: 'center', color: 'var(--muted)', fontSize: 11.5 }}>Studio team? Use your admin email and password here to open the Studio Desk.</p>
                   </form>
                 )}
 
                 {mode === 'signup' && (
                   <div>
-                    <form onSubmit={handleRegister} style={{ display: 'grid', gap: 14 }}>
+                    {verificationPending ? <form onSubmit={handleVerifyEmail} style={{ display: 'grid', gap: 14 }}>
+                      <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13, lineHeight: 1.6 }}>Enter the 6-digit code sent to <strong style={{ color: 'var(--ink)' }}>{email}</strong>. The code expires in 10 minutes.</p>
+                      <Field type="text" label="6-digit email code" icon={Mail} value={verificationCode} onChange={(value) => setVerificationCode(value.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" />
+                      <PrimaryButton type="submit" loading={auth.loading} icon={<Check size={16} />}>Verify email and create account</PrimaryButton>
+                      <button type="button" onClick={handleResendCode} disabled={auth.loading} style={{ border: 0, background: 'transparent', color: '#c55a83', cursor: 'pointer', fontSize: 13 }}>Resend verification code</button>
+                      <button type="button" onClick={() => { setVerificationPending(false); setVerificationCode(''); setSuccess(''); }} style={{ border: 0, background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 12 }}>← Back to account details</button>
+                    </form> : <form onSubmit={handleRegister} style={{ display: 'grid', gap: 14 }}>
                       <Field label="Full name" icon={Check} value={name} onChange={setName} autoComplete="name" />
                       <Field type="email" label="Email address" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
                       <Field type="tel" label="Phone (optional)" icon={ShieldCheck} value={phone} onChange={setPhone} autoComplete="tel" required={false} />
@@ -316,14 +270,10 @@ export default function AuthPage({ initialMode = 'login' }) {
                         <span>I agree to the <a href="/pages/terms-and-conditions" style={{ color: '#c55a83', textDecoration: 'none' }}>Terms</a> and <a href="/pages/privacy-policy" style={{ color: '#c55a83', textDecoration: 'none' }}>Privacy Policy</a>.</span>
                       </label>
                       <PrimaryButton type="submit" loading={auth.loading} icon={<ArrowRight size={16} />}>Create my account</PrimaryButton>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
-                        <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
-                      </div>
-                      <GoogleButton label="Sign up with Google" loading={googleLoading} disabled={!googleReady} onClick={handleGoogle} />
                       <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--muted)' }}>
                         Already have an account? <button type="button" onClick={() => setMode('login')} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: '#c55a83', fontWeight: 600 }}>Sign in instead</button>
                       </div>
-                    </form>
+                    </form>}
 
                   </div>
                 )}
@@ -333,7 +283,7 @@ export default function AuthPage({ initialMode = 'login' }) {
                     <Field type="email" label="Email address" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
                     <PrimaryButton type="submit" loading={auth.loading} icon={<ArrowRight size={16} />}>Send reset link</PrimaryButton>
                     <div style={{ marginTop: 6, padding: 14, borderRadius: 14, background: 'rgba(90,63,86,.04)', border: '1px solid rgba(90,63,86,.08)', fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                      <strong style={{ color: '#5a3f56' }}>Tip:</strong> The link expires in 1 hour. If you don&apos;t see the email, check your spam folder — or in development mode, the reset link is printed to the server console.
+                      The reset link expires in 1 hour. If it doesn&apos;t arrive, check your spam folder.
                     </div>
                     <div style={{ textAlign: 'center', marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                       <Link to="/login" style={{ color: '#c55a83', textDecoration: 'none', fontWeight: 600 }}>← Back to sign in</Link>

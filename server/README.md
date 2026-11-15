@@ -22,17 +22,17 @@ The migrations create catalogue, settings, delivery, order, order-item, custom-r
 
 ## Admin access
 
-The studio admin page is `/admin`. Configure the owner with `ADMIN_1_EMAIL`, `ADMIN_1_PASSWORD` and optionally `ADMIN_1_NAME` (up to five environment owners are supported). The owner can add or deactivate team accounts in Studio Team. Team accounts are created inside the admin area; public admin registration is disabled. Set a strong `JWT_SECRET` in production.
+The studio admin page is `/admin`. It uses the same email/password sign-in page as customers: admins enter their admin credentials there and are routed to the Studio Desk. Configure the owner with `ADMIN_1_EMAIL`, `ADMIN_1_PASSWORD` and optionally `ADMIN_1_NAME` (up to five environment owners are supported). The owner can add or deactivate team accounts in Studio Team. Team accounts are created inside the admin area; public admin registration is disabled. Set a strong `JWT_SECRET` in production.
 
 ## Manual payments and media
 
 In Admin → Payment Setup, upload the studio UPI QR image and enter the UPI ID and payment instructions. The customer reports payment from checkout or order tracking; an admin verifies the transfer and records the amount before the order balance changes. Customers pay 50% before work begins and the remaining amount before handover.
 
-Set `UPLOAD_DIR` to a persistent writable directory on the hosting provider. Product images and request reference photos/videos are stored there; MySQL stores their URLs. Request media is limited to five files, each up to 8 MB. Admins can clear the chat and reference media after marking a request or order complete. Hosting with an ephemeral filesystem will lose these uploads on restart, so use a persistent volume.
+Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` in the backend environment to store product/category images, the payment QR, and customer request images/videos in Cloudinary. MySQL stores the secure Cloudinary URLs; the API secret stays server-side and must never be added to frontend variables. Request media is limited to five files, each up to 8 MB. Admins can clear the chat and reference media after marking a request or order complete; clearing also deletes those Cloudinary assets. If Cloudinary credentials are absent, local development falls back to `UPLOAD_DIR` (default `public/uploads`). Existing local files are not moved automatically; upload them again after configuring Cloudinary, or keep the old files available until migrated.
 
-## Google sign-in
+## Email verification
 
-Set `GOOGLE_CLIENT_ID` on the server and configure the matching authorized JavaScript origins in Google Cloud Console. Google sign-in remains unavailable until this is configured.
+Email/password signups now receive a 6-digit code by email. The code expires after 10 minutes, is stored as a hash, and permits at most five attempts. Configure `EMAIL_PROVIDER=gmail`, `GMAIL_USER` and `GMAIL_APP_PASSWORD` for delivery. Set `APP_BASE_URL` to the deployed website origin (for example, `https://your-domain.example`) so password-reset links point to the live site. Local development defaults to `http://localhost:3000`; production will not send a reset link until `APP_BASE_URL` is set. Apply migration `007_email_verification.sql` before enabling the updated signup flow.
 
 ## API surface
 

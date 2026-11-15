@@ -1,10 +1,8 @@
-import { products, categories, deliveryAreas, deliverySlots, storeSettings } from '../src/mockData.js';
+import { categories, deliveryAreas, deliverySlots, storeSettings } from '../src/mockData.js';
 
-export const catalogProducts = products.map(({ options = [], occasions = [], ...product }) => ({
-  ...product,
-  options,
-  occasions,
-}));
+// Product records are created in Studio and stored in MySQL; never expose demo
+// products as a startup or database fallback.
+export const catalogProducts = [];
 
 export const catalogCategories = categories;
 export const catalogDeliveryAreas = deliveryAreas;

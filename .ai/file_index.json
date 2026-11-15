@@ -1,0 +1,871 @@
+{
+  "metadata": {
+    "project_name": "especially-for-u",
+    "generated_at": "2026-10-09T04:13:17.413Z",
+    "root": ".",
+    "exclusions": [
+      ".git",
+      "node_modules",
+      "dist/build output",
+      "lock files",
+      "environment files",
+      "binaries",
+      "large media/assets"
+    ],
+    "parser": "conservative regular-expression heuristics; no AST parser used",
+    "confidence": 0.84
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "language": "Git ignore",
+      "lines_of_code": 7,
+      "sha256": "89adb2ce43c302df46a058eee3a1151c65f941283149d85e5309e01dbe4c3e1e",
+      "summary": "Excludes dependencies, generated output, environment files, and optional database CA material.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": ".trae/documents/auth_system_plan.md",
+      "language": "Markdown",
+      "lines_of_code": 142,
+      "sha256": "93ff8fabc7b47bf7f1a09d075283255e0e990f53651cde3d14fc10374b17cc8e",
+      "summary": "Planning notes for intended authentication behavior; compare with runtime auth implementation.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "app.config.ts",
+      "language": "TypeScript",
+      "lines_of_code": 3,
+      "sha256": "5b19e3fc0e21b3cfa07470a65f05dacd42ece1971e66bf2e8c805f5a405c409d",
+      "summary": "Exports application logo metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "Dockerfile",
+      "language": "Dockerfile",
+      "lines_of_code": 10,
+      "sha256": "bdb43f6a441347efc988228d557810a45776b081c35055bef20e32bd1e4d6ddf",
+      "summary": "Builds the Vite frontend in Node 22 Alpine and starts production Express.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "index.html",
+      "language": "HTML",
+      "lines_of_code": 14,
+      "sha256": "e315bec31c9b7565568136e7b634dd190455776a5be430327ceb3a12289bcf12",
+      "summary": "Vite HTML shell containing root mount and page metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "path": "package.json",
+      "language": "JSON",
+      "lines_of_code": 39,
+      "sha256": "f68377ad1192faa1c1f4afae2640a5c8037b36a6d1071fe8958add7980323dc3",
+      "summary": "Defines the ESM npm project, scripts, dependency declarations, and build/run commands.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "plan.md",
+      "language": "Markdown",
+      "lines_of_code": 47,
+      "sha256": "4a046380a104abcba3e0979501f6455af2d38aded956ad364b356d8567230627",
+      "summary": "Documents initial storefront design direction, architecture intent, and future API seam.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "postcss.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 1,
+      "sha256": "0a2fc2215a078c6b39f3dfc9cb62c7c453fbd417528622b58f010b8511ea3713",
+      "summary": "Enables Autoprefixer through PostCSS.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "public/manus-routes.json",
+      "language": "JSON",
+      "lines_of_code": 18,
+      "sha256": "45ae22a6b0a703fa99245b3830a0cb75177a35256c4171b03acdac655c1d09f8",
+      "summary": "Lists storefront, account, and admin route metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "path": "README.md",
+      "language": "Markdown",
+      "lines_of_code": 34,
+      "sha256": "7d1a8b80df26dd918883e17378f36be5e3dc6c9e641ed8fd14c292a31b0a020f",
+      "summary": "Describes the storefront, prototype routes, mock-data seam, backend, and local run/deploy model.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/auth.js",
+      "language": "JavaScript",
+      "lines_of_code": 274,
+      "sha256": "e693d0352790decce808754857ac27dc014297f850466ceded6d3e75eff68ea7",
+      "summary": "Implements password/JWT auth, admin/user middleware, Google identity, reset tokens, and config.",
+      "exports": [
+        "authenticateAdmin",
+        "requireAdminJWT",
+        "registerUser",
+        "registerAdmin",
+        "authenticateUser",
+        "authenticateGoogle",
+        "requireUserJWT",
+        "optionalUserJWT",
+        "generatePasswordResetToken",
+        "resetPasswordWithToken",
+        "authConfig"
+      ],
+      "imports": [
+        "bcryptjs",
+        "jsonwebtoken",
+        "nodemailer",
+        "node:crypto"
+      ],
+      "key_symbols": [
+        "getAdminAccounts",
+        "admins",
+        "authenticateAdmin",
+        "requireAdminJWT",
+        "signUserToken",
+        "sanitizeUser",
+        "registerUser",
+        "registerAdmin",
+        "authenticateUser",
+        "authenticateGoogle",
+        "requireUserJWT",
+        "optionalUserJWT",
+        "buildTransport",
+        "generatePasswordResetToken",
+        "resetPasswordWithToken",
+        "authConfig"
+      ],
+      "tags": [
+        "backend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/catalog.js",
+      "language": "JavaScript",
+      "lines_of_code": 35,
+      "sha256": "000ff581e0bcf3f6826f2d40168726b79d5414ac13b9cb252012f43236d32a86",
+      "summary": "Adapts frontend mock catalogue/settings into backend exports and public products.",
+      "exports": [
+        "catalogProducts",
+        "catalogCategories",
+        "catalogDeliveryAreas",
+        "catalogDeliverySlots",
+        "catalogStoreSettings",
+        "publicProduct"
+      ],
+      "imports": [
+        "../src/mockData.js"
+      ],
+      "key_symbols": [
+        "publicProduct",
+        "catalogProducts",
+        "catalogCategories",
+        "catalogDeliveryAreas",
+        "catalogDeliverySlots",
+        "catalogStoreSettings"
+      ],
+      "tags": [
+        "backend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/db.js",
+      "language": "JavaScript",
+      "lines_of_code": 62,
+      "sha256": "42b1f40682e9383becefa5a2374a4b5ce5e1e38ff6d985860bc61304bb52914a",
+      "summary": "Creates/closes managed MySQL pool and reports database mode/SSL setup.",
+      "exports": [
+        "getDatabaseMode",
+        "getPool",
+        "closePool"
+      ],
+      "imports": [
+        "mysql2/promise",
+        "node:fs",
+        "node:path",
+        "node:url"
+      ],
+      "key_symbols": [
+        "getDatabaseMode",
+        "buildSslOptions",
+        "getPool",
+        "closePool"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/index.js",
+      "language": "JavaScript",
+      "lines_of_code": 633,
+      "sha256": "c34f5a4f7990401bc95df5e9c0961e4eed1d8f7fac4455c3ee4d5547626c02c3",
+      "summary": "Creates Express API, middleware, REST routes, and production SPA fallback.",
+      "exports": [],
+      "imports": [
+        "node:path",
+        "node:fs/promises",
+        "node:url",
+        "node:crypto",
+        "express",
+        "cors",
+        "helmet",
+        "zod",
+        "./catalog.js",
+        "./repository.js",
+        "./pricing.js",
+        "./notifications.js",
+        "./auth.js",
+        "./payments.js"
+      ],
+      "key_symbols": [
+        "saveBase64Image"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrate.js",
+      "language": "JavaScript",
+      "lines_of_code": 57,
+      "sha256": "2b810dc9d8b7fe6efcffc5826e36bbc2435d149f4ebf2ec23227b66ad66f82bf",
+      "summary": "Applies ordered SQL migration statements to configured MySQL.",
+      "exports": [],
+      "imports": [
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "node:url",
+        "mysql2/promise"
+      ],
+      "key_symbols": [
+        "buildSslOptions"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/001_initial.sql",
+      "language": "SQL",
+      "lines_of_code": 142,
+      "sha256": "d6ad4aad828739dd07bc7c11b2292f8eb16d30ff8e586596b62e58108698c5af",
+      "summary": "Creates settings, product, delivery, order, request, notification, and audit tables.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "site_settings",
+        "products",
+        "delivery_areas",
+        "delivery_slots",
+        "orders",
+        "order_items",
+        "custom_requests",
+        "notification_logs",
+        "audit_logs"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/002_users_categories_resets.sql",
+      "language": "SQL",
+      "lines_of_code": 39,
+      "sha256": "9eb22b3a75ced0a06fbddb335f143458e18fe2a28d8cdaa8e1b4a8639a734142",
+      "summary": "Adds users, password reset tokens, and category tables.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "users",
+        "password_reset_tokens",
+        "categories"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/003_product_columns.sql",
+      "language": "SQL",
+      "lines_of_code": 32,
+      "sha256": "be4773f883cf2eb428452e8dc88d640ae19d0c7f7412b932b73049338613004c",
+      "summary": "Adds product schema fields introduced after initial schema.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/004_admin_role_order_queries.sql",
+      "language": "SQL",
+      "lines_of_code": 50,
+      "sha256": "005a275865bdb50f77e0ef0be504fb8736c23a9cc5033df218161bc7b7ba618a",
+      "summary": "Adds order-query storage and order/user query support fields/indexes.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "order_queries"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/005_estimated_pickup.sql",
+      "language": "SQL",
+      "lines_of_code": 40,
+      "sha256": "73bcf5200365c7bf6139d2109642b9ad563462dc38f7f5fee151b3f03948fce8",
+      "summary": "Adds estimated production and pickup date fields.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/notifications.js",
+      "language": "JavaScript",
+      "lines_of_code": 216,
+      "sha256": "2c26a01e15d7b92ee1cd28af1b26cbc2b7946d350007a43aba9929c2d7faacf2",
+      "summary": "Formats and sends configured owner/customer notifications.",
+      "exports": [
+        "notificationConfig",
+        "notifyNewOrder",
+        "notifyNewCustomRequest",
+        "sendOrderConfirmation"
+      ],
+      "imports": [
+        "nodemailer"
+      ],
+      "key_symbols": [
+        "getTransporter",
+        "notificationConfig",
+        "formatOrderHTML",
+        "formatCustomRequestHTML",
+        "sendGmail",
+        "notifyNewOrder",
+        "notifyNewCustomRequest",
+        "sendOrderConfirmation"
+      ],
+      "tags": [
+        "backend",
+        "notifications"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/payments.js",
+      "language": "JavaScript",
+      "lines_of_code": 79,
+      "sha256": "6ead2e3c18bc8cfbb082476687bee1f2e03c33e56e7bc5c66b9527fed0ab751c",
+      "summary": "Wraps optional Razorpay order creation and payment/webhook verification.",
+      "exports": [
+        "paymentConfig",
+        "createRazorpayOrder",
+        "verifyPaymentSignature",
+        "verifyWebhookSignature",
+        "fetchPayment"
+      ],
+      "imports": [
+        "razorpay",
+        "node:crypto"
+      ],
+      "key_symbols": [
+        "getRazorpay",
+        "paymentConfig",
+        "createRazorpayOrder",
+        "verifyPaymentSignature",
+        "verifyWebhookSignature",
+        "fetchPayment"
+      ],
+      "tags": [
+        "backend",
+        "payments"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/pricing.js",
+      "language": "JavaScript",
+      "lines_of_code": 88,
+      "sha256": "4020cdc1281661398c11e0fc585277b7e84236116eda356fc83a829d6f80fe6f",
+      "summary": "Defines Zod order/request schemas and authoritative server-side totals/payment policy.",
+      "exports": [
+        "orderInputSchema",
+        "customRequestSchema",
+        "calculateOrder"
+      ],
+      "imports": [
+        "zod"
+      ],
+      "key_symbols": [
+        "calculateOrder",
+        "orderInputSchema",
+        "customRequestSchema"
+      ],
+      "tags": [
+        "backend",
+        "validation",
+        "pricing"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/README.md",
+      "language": "Markdown",
+      "lines_of_code": 29,
+      "sha256": "b0cd5fcd4eb6cff46182e00e2bbac57abb7d4aa47b4ec3ecc90e8ee02f091ad6",
+      "summary": "Documents API startup, database commands, endpoint groups, and notification constraints.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/repository.js",
+      "language": "JavaScript",
+      "lines_of_code": 648,
+      "sha256": "82a28b3be5ac4b6a64ec7b25e86c9dc40647c24881f2913d50f5e2e2db482c66",
+      "summary": "Provides memory/MySQL data access for catalogue, orders, users, settings, logs, and queries.",
+      "exports": [
+        "createRepository",
+        "newEntityId"
+      ],
+      "imports": [
+        "bcryptjs",
+        "node:crypto",
+        "./catalog.js",
+        "./db.js"
+      ],
+      "key_symbols": [
+        "clone",
+        "parseJson",
+        "memoryRepository",
+        "mysqlRepository",
+        "createRepository",
+        "newEntityId"
+      ],
+      "tags": [
+        "backend",
+        "persistence"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/seed.js",
+      "language": "JavaScript",
+      "lines_of_code": 18,
+      "sha256": "78a2436745d5dcd21512e237653b4210da00bda3b8a78ee7f64fa0c19717f693",
+      "summary": "Seeds MySQL settings, catalogue, delivery areas, and slots from shared catalogue.",
+      "exports": [],
+      "imports": [
+        "./catalog.js",
+        "./db.js"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/App.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 1506,
+      "sha256": "3f2006c53e38106ddefda44d3a06103664a0240b7a23a7833be2500e962b95e3",
+      "summary": "Implements client routes, storefront/admin pages, shared UI, cart/wishlist, and live data integration.",
+      "exports": [],
+      "imports": [
+        "framer-motion",
+        "lucide-react",
+        "react-router-dom",
+        "react",
+        "./mockData",
+        "./context/AuthContext.jsx",
+        "./components/ProtectedRoute.jsx",
+        "./pages/AuthPage.jsx",
+        "./pages/ResetPasswordPage.jsx",
+        "react-router-dom"
+      ],
+      "key_symbols": [
+        "useLiveData",
+        "Button",
+        "Badge",
+        "GlassCard",
+        "SectionHeading",
+        "PriceTag",
+        "GradientBackground",
+        "AnnouncementBar",
+        "Navbar",
+        "Footer",
+        "WhatsAppFloat",
+        "ProductCard",
+        "CategoryCard",
+        "Marquee",
+        "Timeline",
+        "HomePage",
+        "ShopPage",
+        "EmptyState",
+        "ProductPage",
+        "CustomRequestPage",
+        "CartPage",
+        "CheckoutPage",
+        "CheckoutContact",
+        "CheckoutDelivery",
+        "CheckoutPayment",
+        "CheckoutReview",
+        "AccountPage",
+        "TrackOrderPage",
+        "AboutPage",
+        "ContentPage",
+        "fileToBase64",
+        "AdminProductsPanel",
+        "AdminCategoriesPanel",
+        "AdminOrdersPanel",
+        "AdminOrderQueriesPanel",
+        "AdminOpsPanel",
+        "AdminLoginPage",
+        "AdminPage",
+        "LiveDataProvider",
+        "useLive",
+        "CategoryRoute",
+        "OccasionRoute",
+        "App"
+      ],
+      "tags": [
+        "frontend",
+        "routing",
+        "storefront",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/components/ProtectedRoute.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 27,
+      "sha256": "a868f5aaf420ce9b332881a20ab5105fce31e034e5806aa0394a3b998d338392",
+      "summary": "Guards client routes by authenticated and optional admin state.",
+      "exports": [
+        "ProtectedRoute"
+      ],
+      "imports": [
+        "react-router-dom",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "ProtectedRoute"
+      ],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/context/AuthContext.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 129,
+      "sha256": "e0210b025df009998b64e994b6f37fad1bbdbc59211191f17598df18376c4eb5",
+      "summary": "Provides auth state, localStorage persistence, API actions, and useAuth.",
+      "exports": [
+        "AuthProvider",
+        "useAuth"
+      ],
+      "imports": [
+        "react"
+      ],
+      "key_symbols": [
+        "readStoredAuth",
+        "AuthProvider",
+        "useAuth"
+      ],
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/main.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 12,
+      "sha256": "ba897cb330524d1e83e96629cdbff581f5896a28d0ad18c559f29728ad47eefe",
+      "summary": "Mounts React under BrowserRouter and imports global styles.",
+      "exports": [],
+      "imports": [
+        "react",
+        "react-dom/client",
+        "react-router-dom",
+        "./App",
+        "./styles.css"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/mockData.js",
+      "language": "JavaScript",
+      "lines_of_code": 128,
+      "sha256": "4adac2efc624c24ad20a10b3c8457e9157e8ac6206e1a5875ca2249f095c871d",
+      "summary": "Provides prototype products, categories, content, settings, orders, delivery options, and helpers.",
+      "exports": [
+        "media",
+        "categories",
+        "products",
+        "occasions",
+        "reviews",
+        "deliveryAreas",
+        "deliverySlots",
+        "storeSettings",
+        "cmsPages",
+        "faqs",
+        "adminNeedsAttention",
+        "adminTeam",
+        "auditLogs",
+        "notificationLogs",
+        "sampleOrders",
+        "sampleRequests",
+        "howItWorks",
+        "formatINR"
+      ],
+      "imports": [],
+      "key_symbols": [
+        "media",
+        "categories",
+        "products",
+        "occasions",
+        "reviews",
+        "deliveryAreas",
+        "deliverySlots",
+        "storeSettings",
+        "cmsPages",
+        "faqs",
+        "adminNeedsAttention",
+        "adminTeam",
+        "auditLogs",
+        "notificationLogs",
+        "sampleOrders",
+        "sampleRequests",
+        "howItWorks",
+        "formatINR"
+      ],
+      "tags": [
+        "frontend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/pages/AuthPage.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 332,
+      "sha256": "01f19bfce4767cd8d2869ad652c8d238df7154b482e497c421292d022555ff00",
+      "summary": "Renders login, signup, admin signup, and password recovery forms.",
+      "exports": [
+        "AuthPage"
+      ],
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "framer-motion",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "GradientShell",
+        "PillTabs",
+        "Field",
+        "AlertBox",
+        "PrimaryButton",
+        "GoogleButton",
+        "AuthPage"
+      ],
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/pages/ResetPasswordPage.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 161,
+      "sha256": "3ebb6b17f367625a5dff3e0274108941cca0cc84b55609e5d3faeed14cee4c41",
+      "summary": "Renders password reset using the URL token and auth context.",
+      "exports": [
+        "ResetPasswordPage"
+      ],
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "framer-motion",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "AlertBox",
+        "Field",
+        "PrimaryButton",
+        "ResetPasswordPage"
+      ],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/styles.css",
+      "language": "CSS",
+      "lines_of_code": 490,
+      "sha256": "e3a197ce3f05955e51f6a821c77f163ec1510c62dec9f49d2b5b9e67c6f95b27",
+      "summary": "Contains app design tokens, responsive styles, and reduced-motion behavior.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "tailwind.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 13,
+      "sha256": "8493cc6743b9f6734434674a66d124994f3dd6213ac8ff1da7abf9505324f67a",
+      "summary": "Defines Tailwind content paths, palette extensions, and fonts.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "TODO.md",
+      "language": "Markdown",
+      "lines_of_code": 15,
+      "sha256": "b11639293df9e78ae038ed31b3896a97553377d85474dec83dbd28fbdc575eb0",
+      "summary": "Records product/backend scope, operations features, and desired implementation details.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "vite.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 7,
+      "sha256": "095c68919d300489014292586b6d2446b4709832b54638aba4067c65a14c599f",
+      "summary": "Configures React in Vite, dev ports, and /api proxy to Express.",
+      "exports": [],
+      "imports": [
+        "vite",
+        "@vitejs/plugin-react"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    }
+  ]
+}

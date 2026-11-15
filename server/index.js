@@ -3,17 +3,17 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
-import { catalogProducts } from './catalog.js';
 import { createRepository, newEntityId } from './repository.js';
 import { calculateOrder, customRequestSchema, orderInputSchema } from './pricing.js';
 import { notificationConfig, notifyNewOrder, notifyNewCustomRequest, sendOrderConfirmation } from './notifications.js';
 import {
   authenticateAdmin, requireAdminJWT, requireOwnerJWT, authConfig,
-  registerUser, createTeamAdmin, authenticateUser, authenticateGoogle,
+  sendRegistrationCode, verifyRegistrationCode, createTeamAdmin, authenticateUser,
   requireUserJWT, optionalUserJWT,
   generatePasswordResetToken, resetPasswordWithToken,
 } from './auth.js';
@@ -48,8 +48,47 @@ app.use(express.json({ limit: '65mb' }));
 const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.resolve(__dirname, '../public/uploads'));
 fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(() => {});
 
+function cloudinaryConfig() {
+  const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+  return CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET
+    ? { cloudName: CLOUDINARY_CLOUD_NAME, apiKey: CLOUDINARY_API_KEY, apiSecret: CLOUDINARY_API_SECRET }
+    : null;
+}
+
+function cloudinarySignature(params, apiSecret) {
+  const serialized = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('&');
+  return createHash('sha1').update(`${serialized}${apiSecret}`).digest('hex');
+}
+
+async function uploadToCloudinary(dataUrl, filenameHint, folder, resourceType = 'auto') {
+  const config = cloudinaryConfig();
+  if (!config) return null;
+  const match = /^data:(image\/[a-z0-9+.-]+|video\/[a-z0-9+.-]+);base64,(.*)$/is.exec(String(dataUrl || ''));
+  if (!match) throw Object.assign(new Error('Upload a valid image or video file.'), { status: 400 });
+  const timestamp = Math.floor(Date.now() / 1000);
+  const publicId = `${(filenameHint || 'upload').replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '').slice(0, 60) || 'upload'}-${randomUUID()}`;
+  const signed = { folder, public_id: publicId, timestamp };
+  const form = new FormData();
+  form.set('file', new Blob([Buffer.from(match[2], 'base64')], { type: match[1] }));
+  form.set('api_key', config.apiKey);
+  form.set('timestamp', String(timestamp));
+  form.set('folder', folder);
+  form.set('public_id', publicId);
+  form.set('signature', cloudinarySignature(signed, config.apiSecret));
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${resourceType}/upload`, { method: 'POST', body: form });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.secure_url) {
+    console.error('[cloudinary-upload-error]', result.error?.message || response.statusText);
+    throw Object.assign(new Error('Cloudinary could not store this upload. Check the Cloudinary settings and try again.'), { status: 502 });
+  }
+  return result.secure_url;
+}
+
 async function saveBase64Image(b64, filenameHint = 'upload') {
   if (!b64) return null;
+  const cloudUrl = await uploadToCloudinary(b64, filenameHint, 'especially-for-u/products', 'image');
+  if (cloudUrl) return cloudUrl;
   let data = b64;
   let mime = 'image/png';
   const match = /^data:(image\/[a-z0-9+\-.]+);base64,(.*)$/is.exec(b64);
@@ -70,6 +109,8 @@ async function saveReferenceMedia(dataUrl, filenameHint = 'reference') {
   const mime = match[1].toLowerCase();
   const bytes = Buffer.from(match[2], 'base64');
   if (bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error('Each reference file must be 8 MB or smaller.'), { status: 413 });
+  const cloudUrl = await uploadToCloudinary(dataUrl, filenameHint, 'especially-for-u/references', 'auto');
+  if (cloudUrl) return cloudUrl;
   const ext = (mime.split('/')[1] || 'bin').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
   const folder = path.join(UPLOAD_DIR, 'references');
   await fs.mkdir(folder, { recursive: true });
@@ -80,6 +121,22 @@ async function saveReferenceMedia(dataUrl, filenameHint = 'reference') {
 
 async function removeReferenceMedia(urls = []) {
   await Promise.all(urls.map(async (url) => {
+    const config = cloudinaryConfig();
+    if (config && /^https:\/\/res\.cloudinary\.com\//.test(String(url))) {
+      const match = /^https:\/\/res\.cloudinary\.com\/[^/]+\/(image|video|raw)\/upload\/(?:[^/]+\/)*(?:v\d+\/)?(.+?)\.[a-z0-9]+(?:\?.*)?$/i.exec(String(url));
+      if (!match) return;
+      const [, resourceType, publicId] = match;
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signed = { public_id: publicId, timestamp };
+      const form = new FormData();
+      form.set('public_id', publicId);
+      form.set('timestamp', String(timestamp));
+      form.set('api_key', config.apiKey);
+      form.set('signature', cloudinarySignature(signed, config.apiSecret));
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${resourceType}/destroy`, { method: 'POST', body: form });
+      if (!response.ok) console.error('[cloudinary-delete-error]', response.statusText);
+      return;
+    }
     const prefix = '/uploads/references/';
     if (!String(url).startsWith(prefix)) return;
     const filename = path.basename(String(url).slice(prefix.length));
@@ -131,6 +188,36 @@ app.get('/api/settings/public', async (_request, response, next) => {
 app.get('/api/delivery/areas', async (_request, response, next) => {
   try { return response.json({ areas: await repository.listDeliveryAreas(), slots: await repository.listDeliverySlots() }); }
   catch (error) { return next(error); }
+});
+
+// Reviews are customer-submitted and only become public after Studio approval.
+app.get('/api/reviews', async (request, response, next) => {
+  try {
+    const productId = String(request.query.productId || '').trim().slice(0, 80) || undefined;
+    const reviews = await repository.listReviews({ productId, status: 'APPROVED' });
+    return response.json({ reviews });
+  } catch (error) { return next(error); }
+});
+
+app.post('/api/reviews', requireUserJWT, async (request, response, next) => {
+  try {
+    const productId = String(request.body?.productId || '').trim().slice(0, 80);
+    const rating = Number(request.body?.rating);
+    const comment = String(request.body?.comment || '').trim();
+    if (!productId || !Number.isInteger(rating) || rating < 1 || rating > 5 || comment.length < 3 || comment.length > 1200) {
+      return response.status(400).json({ error: 'INVALID_REVIEW', message: 'Choose 1–5 stars and write a comment between 3 and 1,200 characters.' });
+    }
+    const product = await repository.getProduct(productId);
+    if (!product || product.isActive === false || product.is_active === 0) return response.status(404).json({ error: 'PRODUCT_NOT_FOUND', message: 'This product is no longer available for review.' });
+    const review = await repository.createReview({
+      id: newEntityId('REV'), productId, userId: request.user.sub,
+      customerName: String(request.user.name || request.user.email?.split('@')[0] || 'Customer').trim().slice(0, 120), rating, comment,
+    });
+    return response.status(201).json({ review, message: 'Thanks! Your review is waiting for studio approval.' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return response.status(409).json({ error: 'REVIEW_EXISTS', message: 'You have already reviewed this product.' });
+    return next(error);
+  }
 });
 
 // ── Order creation (protected) ────────────────────────────────────────
@@ -357,7 +444,7 @@ app.post('/api/custom-requests/:id/accept-quote', requireUserJWT, async (request
 app.post('/api/custom-requests', requireUserJWT, async (request, response, next) => {
   try {
     const input = customRequestSchema.parse(request.body);
-    const product = catalogProducts.find((candidate) => candidate.id === input.productId);
+    const product = input.productId ? await repository.getProduct(input.productId) : null;
     const uploadedUrls = await Promise.all(input.referenceFiles.map((file) => saveReferenceMedia(file.data, file.name)));
     const { referenceFiles, ...requestInput } = input;
     const requestRecord = { ...requestInput, referenceUrls: [...input.referenceUrls, ...uploadedUrls], userId: request.user.sub, id: newEntityId('CR'), productName: product?.name || '', status: 'NEW' };
@@ -386,10 +473,37 @@ app.post('/api/auth/register', async (request, response, next) => {
     if (!email || !password || !name) {
       return response.status(400).json({ error: 'MISSING_FIELDS', message: 'Name, email and password are required.' });
     }
-    const result = await registerUser(repository, { email, password, name, phone });
-    return response.status(201).json(result);
+    const result = await sendRegistrationCode(repository, { email, password, name, phone });
+    return response.status(200).json(result);
   } catch (error) {
     if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: 'EMAIL_TAKEN', message: error.message });
+    if (error.code === 'OTP_COOLDOWN') return response.status(429).json({ error: error.code, message: error.message });
+    if (error.code === 'EMAIL_NOT_CONFIGURED' || error.code === 'EMAIL_SEND_FAILED') return response.status(503).json({ error: error.code, message: error.message });
+    if (['INVALID_EMAIL', 'INVALID_REGISTRATION'].includes(error.code)) return response.status(400).json({ error: error.code, message: error.message });
+    return next(error);
+  }
+});
+
+app.post('/api/auth/verify-email', async (request, response, next) => {
+  try {
+    const { email, code } = request.body || {};
+    const result = await verifyRegistrationCode(repository, email, code);
+    return response.status(201).json(result);
+  } catch (error) {
+    if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: error.code, message: error.message });
+    if (['OTP_EXPIRED', 'OTP_ATTEMPTS_EXCEEDED', 'INVALID_OTP'].includes(error.code)) return response.status(400).json({ error: error.code, message: error.message });
+    return next(error);
+  }
+});
+
+app.post('/api/auth/resend-verification', async (request, response, next) => {
+  try {
+    const result = await sendRegistrationCode(repository, { email: request.body?.email }, { resend: true });
+    return response.json(result);
+  } catch (error) {
+    if (error.code === 'OTP_COOLDOWN') return response.status(429).json({ error: error.code, message: error.message });
+    if (error.code === 'VERIFICATION_NOT_FOUND' || error.code === 'OTP_ATTEMPTS_EXCEEDED') return response.status(400).json({ error: error.code, message: error.message });
+    if (error.code === 'EMAIL_NOT_CONFIGURED' || error.code === 'EMAIL_SEND_FAILED') return response.status(503).json({ error: error.code, message: error.message });
     return next(error);
   }
 });
@@ -415,47 +529,19 @@ app.post('/api/auth/login', async (request, response, next) => {
   }
 });
 
-app.post('/api/auth/google', async (request, response, next) => {
-  try {
-    const { credential, accessToken } = request.body || {};
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) return response.status(503).json({ error: 'GOOGLE_NOT_CONFIGURED', message: 'Google sign-in is not configured on this site yet.' });
-    let profile;
-    if (accessToken) {
-      const result = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (!result.ok) return response.status(401).json({ error: 'INVALID_GOOGLE_TOKEN', message: 'Google sign-in could not verify your account.' });
-      profile = await result.json();
-    } else if (credential) {
-      const url = new URL('https://oauth2.googleapis.com/tokeninfo');
-      url.searchParams.set('id_token', credential);
-      const result = await fetch(url);
-      if (!result.ok) return response.status(401).json({ error: 'INVALID_GOOGLE_TOKEN', message: 'Google sign-in could not verify your account.' });
-      profile = await result.json();
-      if (profile.aud !== clientId) return response.status(401).json({ error: 'INVALID_GOOGLE_AUDIENCE' });
-    } else {
-      return response.status(400).json({ error: 'MISSING_GOOGLE_TOKEN', message: 'Google did not return a sign-in token.' });
-    }
-    if (!profile.sub || !profile.email || !(profile.email_verified === true || profile.email_verified === 'true' || profile.verified_email === true)) {
-      return response.status(401).json({ error: 'UNVERIFIED_GOOGLE_ACCOUNT', message: 'Use a Google account with a verified email address.' });
-    }
-    const payload = { googleId: profile.sub, email: profile.email, name: profile.name, avatarUrl: profile.picture };
-    const result = await authenticateGoogle(repository, payload);
-    return response.json(result);
-  } catch (error) { return next(error); }
-});
-
-app.get('/api/auth/config', async (_request, response) => {
-  const cfg = authConfig();
-  return response.json({ googleClientId: cfg.googleClientId, userAuth: cfg.userAuth });
-});
-
 app.post('/api/auth/forgot-password', async (request, response, next) => {
   try {
     const { email } = request.body || {};
     if (!email) return response.status(400).json({ error: 'MISSING_EMAIL', message: 'Email is required.' });
     const result = await generatePasswordResetToken(repository, email);
     return response.json(result);
-  } catch (error) { return next(error); }
+  } catch (error) {
+    if (['EMAIL_NOT_CONFIGURED', 'EMAIL_SEND_FAILED', 'APP_BASE_URL_NOT_CONFIGURED'].includes(error.code)) {
+      console.error(`[password-reset] ${error.code}: ${error.message}`);
+      return response.status(503).json({ error: error.code, message: 'Password reset is temporarily unavailable. Please try again later.' });
+    }
+    return next(error);
+  }
 });
 
 app.post('/api/auth/reset-password', async (request, response, next) => {
@@ -775,6 +861,29 @@ app.delete('/api/admin/categories/:id', requireAdminJWT, async (request, respons
   try {
     const ok = await repository.deleteCategory(request.params.id);
     if (!ok) return response.status(404).json({ error: 'CATEGORY_NOT_FOUND' });
+    return response.json({ ok: true });
+  } catch (error) { return next(error); }
+});
+
+app.get('/api/admin/reviews', requireAdminJWT, async (_request, response, next) => {
+  try { return response.json({ reviews: await repository.listReviews() }); }
+  catch (error) { return next(error); }
+});
+
+app.patch('/api/admin/reviews/:id', requireAdminJWT, async (request, response, next) => {
+  try {
+    const status = String(request.body?.status || '').toUpperCase();
+    if (!['APPROVED', 'REJECTED'].includes(status)) return response.status(400).json({ error: 'INVALID_REVIEW_STATUS' });
+    const review = await repository.updateReviewStatus(request.params.id, status);
+    if (!review) return response.status(404).json({ error: 'REVIEW_NOT_FOUND' });
+    return response.json({ review });
+  } catch (error) { return next(error); }
+});
+
+app.delete('/api/admin/reviews/:id', requireAdminJWT, async (request, response, next) => {
+  try {
+    const ok = await repository.deleteReview(request.params.id);
+    if (!ok) return response.status(404).json({ error: 'REVIEW_NOT_FOUND' });
     return response.json({ ok: true });
   } catch (error) { return next(error); }
 });

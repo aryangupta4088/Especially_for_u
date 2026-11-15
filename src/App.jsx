@@ -10,8 +10,8 @@ import {
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  adminNeedsAttention, adminTeam, auditLogs, categories as mockCategories, cmsPages, deliveryAreas, deliverySlots,
-  faqs, formatINR, howItWorks, media, notificationLogs, occasions, products as mockProducts, reviews, sampleOrders,
+  adminNeedsAttention, adminTeam, auditLogs, cmsPages, deliveryAreas, deliverySlots,
+  faqs, formatINR, howItWorks, media, notificationLogs, occasions, products as mockProducts, sampleOrders,
   sampleRequests, storeSettings,
 } from './mockData';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
@@ -32,32 +32,37 @@ const useApp = () => window.__efuApp;
 
 function useLiveData() {
   const [products, setProducts] = useState(mockProducts);
-  const [categories, setCategories] = useState(mockCategories);
+  const [categories, setCategories] = useState([]);
   const [settings, setSettings] = useState(storeSettings);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
-    Promise.all([
+    const load = () => Promise.all([
       fetch('/api/products').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch('/api/categories').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch('/api/settings/public').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([p, c, s]) => {
       if (!alive) return;
-      if (p?.products?.length) setProducts(p.products);
-      if (c?.categories?.length) setCategories(c.categories);
+      // A successful empty response is still authoritative. Keeping mock data
+      // here made a disconnected database look like a real 16-item catalog.
+      setProducts(Array.isArray(p?.products) ? p.products : []);
+      setCategories(Array.isArray(c?.categories) ? c.categories : []);
       if (s?.settings) setSettings(s.settings);
       setLoaded(true);
     });
+    load();
+    const onCatalogUpdated = () => load();
+    window.addEventListener('efu:catalog-updated', onCatalogUpdated);
     return () => { alive = false; };
   }, []);
   return { products, categories, settings, loaded };
 }
 
-function Button({ children, variant = 'primary', icon, type = 'button', onClick, className = '', as: Component = 'button', to }) {
+function Button({ children, variant = 'primary', icon, type = 'button', onClick, className = '', as: Component = 'button', to, disabled = false }) {
   const content = <>{children}{icon && <span className="button-icon">{icon}</span>}</>;
   const classes = `button button-${variant} ${className}`;
   if (Component === Link) return <Link to={to} className={classes}>{content}</Link>;
-  return <button type={type} onClick={onClick} className={classes}>{content}</button>;
+  return <button type={type} onClick={onClick} className={classes} disabled={disabled}>{content}</button>;
 }
 
 function Badge({ children, tone = 'soft' }) { return <span className={`badge badge-${tone}`}>{children}</span>; }
@@ -75,6 +80,12 @@ function SectionHeading({ eyebrow, title, body, align = 'left', action }) {
     </div>
     {action}
   </div>;
+}
+
+function PinkStars({ rating = 0, onChange, label = 'Rating' }) {
+  return <span className="pink-stars" role={onChange ? 'group' : 'img'} aria-label={`${label}: ${rating} out of 5 stars`}>
+    {[1, 2, 3, 4, 5].map((star) => onChange ? <button type="button" key={star} onClick={() => onChange(star)} aria-label={`${star} star${star > 1 ? 's' : ''}`}><Star size={20} fill={star <= rating ? 'currentColor' : 'none'} /></button> : <Star key={star} size={16} fill={star <= rating ? 'currentColor' : 'none'} />)}
+  </span>;
 }
 
 function PriceTag({ product, price }) {
@@ -105,6 +116,11 @@ function Navbar({ cartCount, wishlistCount, settings }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [adminSession, setAdminSession] = useState(() => {
+    if (!localStorage.getItem('efu_admin_token')) return null;
+    try { return JSON.parse(localStorage.getItem('efu_admin_user') || 'null'); }
+    catch { return null; }
+  });
   const location = useLocation();
 
   useEffect(() => {
@@ -113,13 +129,45 @@ function Navbar({ cartCount, wishlistCount, settings }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
   useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    const token = localStorage.getItem('efu_admin_token');
+    if (!token) { setAdminSession(null); return; }
+    let active = true;
+    try {
+      const cachedAdmin = localStorage.getItem('efu_admin_user');
+      if (cachedAdmin) setAdminSession(JSON.parse(cachedAdmin));
+    } catch { /* Validate the session with the server below. */ }
+    fetch('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error('Admin session expired.');
+        if (active) setAdminSession(data.admin);
+      })
+      .catch(() => {
+        if (!active) return;
+        localStorage.removeItem('efu_admin_token');
+        localStorage.removeItem('efu_admin_user');
+        setAdminSession(null);
+      });
+    return () => { active = false; };
+  }, [location.pathname]);
+
+  const handleSignOut = () => {
+    if (adminSession) {
+      localStorage.removeItem('efu_admin_token');
+      localStorage.removeItem('efu_admin_user');
+      setAdminSession(null);
+    }
+    if (user) logout();
+    setMenuOpen(false);
+    navigate('/', { replace: true });
+  };
 
   const links = [
     ['Home', '/'],
     ['Shop', '/shop'],
     ['Custom Request', '/custom-request'],
     ['About', '/about'],
-    ['Track Order', '/track-order'],
   ];
 
   return (
@@ -144,9 +192,9 @@ function Navbar({ cartCount, wishlistCount, settings }) {
               <Search size={18} />
             </Link>
 
-            {user ? (
+            {user || adminSession ? (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                {isAdmin && (
+                {(isAdmin || adminSession) && (
                   <Link
                     to="/admin"
                     style={{
@@ -167,18 +215,18 @@ function Navbar({ cartCount, wishlistCount, settings }) {
                     👑 Studio Desk
                   </Link>
                 )}
-                <Link
+                {user && <Link
                   to="/account"
                   className="icon-button nav-account"
                   aria-label="My Account"
                   title={`Account: ${user.name || user.email}`}
                 >
                   <CircleUserRound size={18} />
-                </Link>
+                </Link>}
                 <button
-                  onClick={() => { logout(); navigate('/', { replace: true }); }}
+                  onClick={handleSignOut}
                   className="icon-button"
-                  title={`Sign out ${user.name || user.email}`}
+                  title={`Sign out ${(adminSession || user)?.name || (adminSession || user)?.email || 'admin'}`}
                   aria-label="Sign out"
                 >
                   <LogOut size={16} />
@@ -232,22 +280,22 @@ function Navbar({ cartCount, wishlistCount, settings }) {
                 ))}
               </div>
 
-              {user ? (
+              {user || adminSession ? (
                 <div style={{ padding: '16px 20px', borderTop: '1px solid var(--line)', marginTop: '12px' }}>
                   <div className="mobile-menu-note" style={{ marginBottom: '10px' }}>
-                    <span>Signed in as</span><strong>{user.name || user.email}</strong>
+                    <span>Signed in as</span><strong>{(adminSession || user).name || (adminSession || user).email}</strong>
                   </div>
                   <div style={{ display: 'grid', gap: '8px' }}>
-                    <NavLink to="/account" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '10px', background: 'rgba(90,63,86,.05)', textDecoration: 'none', color: 'var(--ink)', fontSize: '13px', fontWeight: 500 }}>
+                    {user && <NavLink to="/account" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '10px', background: 'rgba(90,63,86,.05)', textDecoration: 'none', color: 'var(--ink)', fontSize: '13px', fontWeight: 500 }}>
                       My Account & Orders <ArrowRight size={14} />
-                    </NavLink>
-                    {isAdmin && (
+                    </NavLink>}
+                    {(isAdmin || adminSession) && (
                       <NavLink to="/admin" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '10px', background: 'rgba(197,90,131,.12)', textDecoration: 'none', color: '#b24d76', fontSize: '13px', fontWeight: 600 }}>
                         👑 Studio Admin Desk <ArrowRight size={14} />
                       </NavLink>
                     )}
                     <button
-                      onClick={() => { logout(); setMenuOpen(false); navigate('/', { replace: true }); }}
+                      onClick={handleSignOut}
                       style={{ marginTop: '4px', padding: '8px', borderRadius: '10px', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontSize: '12px' }}
                     >
                       Sign Out
@@ -291,8 +339,8 @@ function Footer() {
     <div className="container footer-grid">
       <div className="footer-brand"><Link to="/" className="wordmark"><span>Especially</span><em>For U</em><i>✦</i></Link><p>Handmade gifts, soft keepsakes and tiny worlds made especially for your people.</p><Badge tone="icy">Delivering only in Muradnagar</Badge></div>
       <div><p className="footer-label">Explore</p><Link to="/shop">Shop ready-made</Link><Link to="/custom-request">Create something custom</Link><Link to="/about">Our story</Link></div>
-      <div><p className="footer-label">Need a little help?</p><Link to="/track-order">Track an order</Link><Link to="/pages/faq">FAQs</Link><a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a><a href="https://wa.me/919999999999">WhatsApp us</a></div>
-      <div className="footer-social"><p className="footer-label">Find us in the wild</p><div className="social-row"><a href="https://instagram.com" aria-label="Instagram"><Camera size={18} /></a><a href="https://wa.me/919999999999" aria-label="WhatsApp"><MessageCircle size={18} /></a></div><p className="small-note">Made with soft corners and a lot of care.</p></div>
+      <div><p className="footer-label">Need a little help?</p><Link to="/account">Your account & chats</Link><Link to="/pages/faq">FAQs</Link><a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a><a href="https://wa.me/919997837648">WhatsApp us</a></div>
+      <div className="footer-social"><p className="footer-label">Find us in the wild</p><div className="social-row"><a href="https://instagram.com" aria-label="Instagram"><Camera size={18} /></a><a href="https://wa.me/919997837648" aria-label="WhatsApp"><MessageCircle size={18} /></a></div><p className="small-note">Made with soft corners and a lot of care.</p></div>
     </div>
     <div className="container footer-bottom">
       <span>© 2026 Especially For U</span>
@@ -304,12 +352,21 @@ function Footer() {
   </footer>;
 }
 
-function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa.me/919999999999" aria-label="Chat on WhatsApp"><MessageCircle size={21} /><span>Say hello</span></a>; }
+function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa.me/919997837648" aria-label="Chat on WhatsApp"><MessageCircle size={21} /><span>Say hello</span></a>; }
 
-function ProductCard({ product, onAdd, onWish, isWished, categories = mockCategories }) {
+function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
   const navigate = useNavigate();
   const cta = 'Request this item';
-  const handlePrimary = () => navigate(`/custom-request?product=${product.slug}`);
+  const handlePrimary = () => {
+    if (product.type === 'CUSTOM_QUOTE') return navigate(`/custom-request?product=${product.slug}`);
+    const options = (product.options || []).map((option) => {
+      const value = option.values?.[0];
+      return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
+    }).filter(Boolean);
+    const adjustment = options.reduce((sum, option) => sum + option.adjustment, 0);
+    onAdd?.({ ...product, productId: product.id, price: Number(product.price) + adjustment, selected: options.map((option) => option.value), selectedOptions: options, quantity: 1 });
+    navigate('/checkout');
+  };
   return <motion.article className={`product-card ${product.premium ? 'product-premium' : ''}`} whileHover={{ y: -7 }} transition={pageTransition}>
     <div className="product-image-wrap">
       <Link to={`/product/${product.slug}`} className="product-image-link"><img src={product.image} alt={product.name} loading="lazy" /></Link>
@@ -334,29 +391,37 @@ function Timeline({ compact = false }) {
   return <div className={`timeline ${compact ? 'timeline-compact' : ''}`}>{steps.map((step, index) => <div className={`timeline-step ${index <= active ? 'is-done' : ''} ${index === active ? 'is-active' : ''}`} key={step}><div className="timeline-dot">{index < active ? <Check size={13} /> : index === active ? <span /> : ''}</div><span>{step}</span>{index < steps.length - 1 && <div className="timeline-line" />}</div>)}</div>;
 }
 
-function HomePage({ live }) {
+function HomePage({ live: providedLive }) {
+  const live = providedLive || useLive();
   const { addToCart, onWish, wishlist } = useApp();
-  const products = live?.products?.length ? live.products : mockProducts;
-  const categories = live?.categories?.length ? live.categories : mockCategories;
+  const products = live?.products || [];
+  const categories = live?.categories || [];
   const settings = live?.settings || storeSettings;
   const featured = products.slice(0, 4);
+  const [homeReviews, setHomeReviews] = useState([]);
+  useEffect(() => {
+    fetch('/api/reviews').then((response) => response.ok ? response.json() : null)
+      .then((data) => setHomeReviews((data?.reviews || []).slice(0, 6))).catch(() => setHomeReviews([]));
+  }, []);
   return <GradientBackground variant="home"><Navbar cartCount={useApp().cart.length} wishlistCount={wishlist.length} settings={settings} /><main>
-    <section className="hero-section"><div className="hero-image"><img src={media.hero} alt="Pastel handmade crafts arranged on a table" /></div><div className="hero-overlay" /><div className="container hero-content"><div className="hero-copy"><p className="eyebrow hero-eyebrow"><span className="eyebrow-mark">✦</span> Small studio · big feelings</p><h1>Made <em>Especially</em><br />For U <span className="sparkle-inline">✦</span></h1><p className="hero-subtitle">{settings.tagline || 'Custom gifts, handmade creations & little things made just for you.'}</p><div className="hero-actions"><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Shop ready-made</Button><Button as={Link} to="/custom-request" variant="secondary" icon={<WandSparkles size={17} />}>Create something custom</Button></div><div className="hero-note"><span className="hero-note-mark">♡</span><span>Made slowly in Muradnagar<br /><strong>for your favourite people.</strong></span></div></div><div className="floating-card floating-card-one"><img src={media.product2} alt="Soft pastel paper flowers" /><span>for her · ₹899</span></div><div className="floating-card floating-card-two"><img src={media.product1} alt="Pressed flower keepsake" /><span>made to order</span></div></div><a href="#explore" className="scroll-cue"><span>Scroll to explore</span><ArrowDown size={16} /></a></section>
+    <section className="hero-section"><div className="hero-image"><img src={media.hero} alt="Pastel handmade crafts arranged on a table" /></div><div className="hero-overlay" /><div className="container hero-content"><div className="hero-copy"><p className="eyebrow hero-eyebrow"><span className="eyebrow-mark">✦</span> Small studio · big feelings</p><h1>Made <em>Especially</em><br />For U <span className="sparkle-inline">✦</span></h1><p className="hero-subtitle">{settings.tagline || 'Custom gifts, handmade creations & little things made just for you.'}</p><div className="hero-actions"><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Shop ready-made</Button><Button as={Link} to="/custom-request" variant="secondary" icon={<WandSparkles size={17} />}>Create something custom</Button></div><div className="hero-note"><span className="hero-note-mark">♡</span><span>Made slowly in Muradnagar<br /><strong>for your favourite people.</strong></span></div></div></div><a href="#explore" className="scroll-cue"><span>Scroll to explore</span><ArrowDown size={16} /></a></section>
     <Marquee />
     <section className="section section-explore" id="explore"><div className="container"><SectionHeading eyebrow="Made by hand, chosen by heart" title={<>Explore our <em>creations</em></>} body="From a tiny note card to a whole little world — find something that feels like them." action={<Button as={Link} to="/shop" variant="ghost" icon={<ArrowUpRight size={16} />}>See all pieces</Button>} /><div className="category-bento">{categories.map((category, index) => <CategoryCard category={category} index={index} key={category.id} />)}</div></div></section>
     <section className="section section-featured"><div className="container"><SectionHeading eyebrow="A little something special" title={<>Made Especially <em>For U</em></>} body="Our most-loved handmade pieces, ready to become part of your story." action={<Button as={Link} to="/shop" variant="ghost" icon={<ArrowRight size={16} />}>Shop all</Button>} /><div className="product-grid featured-grid">{featured.map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div></div></section>
     <section className="section custom-feature"><div className="container custom-feature-inner"><div className="custom-feature-copy"><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Tell us the story, the colours, the tiny detail you can’t stop thinking about. We’ll turn it into something you can hold.</p><Button as={Link} to="/custom-request" icon={<ArrowUpRight size={17} />}>Start a request</Button><div className="custom-feature-foot"><span>01</span><span className="foot-line" /><span>Made for your moment</span></div></div><div className="custom-image-stack"><div className="stack-card stack-back"><img src={media.product3} alt="Pastel handmade art" /></div><div className="stack-card stack-middle"><img src={media.collage} alt="Layered handmade craft details" /></div><div className="stack-card stack-front"><img src={media.product4} alt="Polaroid memory keepsake" /><span className="stack-tag">your story, made tangible</span></div></div></div></section>
     <section className="section section-occasions"><div className="container"><SectionHeading eyebrow="Shop by feeling" title={<>For all the <em>little occasions</em></>} body="A thoughtful something for the birthday, the almost-anniversary, or the random Tuesday that deserves a little sparkle." /><div className="occasion-chips">{occasions.map((occasion, index) => <Link key={occasion} to={`/occasion/${occasion.toLowerCase().replaceAll(' ', '-')}`} className={`occasion-chip ${index === 0 ? 'is-active' : ''}`}>{occasion}<ArrowUpRight size={14} /></Link>)}</div><div className="occasion-rail">{products.slice(4, 8).map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div></div></section>
     <section className="section how-section"><div className="container"><SectionHeading align="center" eyebrow="The easy, lovely part" title={<>How it <em>works</em></>} body="No mystery, no awkward forms. Just a simple path from your idea to something real." /><div className="how-grid">{howItWorks.map((step, index) => <motion.div className="how-step" key={step.number} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.08, ...pageTransition }}><div className="how-number">{step.number}</div><div className="how-icon"><Icon name={step.icon} size={22} /></div><h3>{step.title}</h3><p>{step.text}</p>{index < howItWorks.length - 1 && <ArrowRight className="how-arrow" size={18} />}</motion.div>)}</div></div></section>
-    <section className="section reviews-section"><div className="container"><SectionHeading eyebrow="Kind words, kept close" title={<>From our <em>favourite people</em></>} /><div className="reviews-grid">{reviews.map((review) => <GlassCard className="review-card" key={review.name}><div className="stars">{Array.from({ length: review.rating }).map((_, i) => <Star key={i} size={14} fill="currentColor" />)}</div><p>“{review.quote}”</p><div className="review-by"><div className="review-avatar">{review.name[0]}</div><div><strong>{review.name}</strong><span>{review.product}</span></div></div></GlassCard>)}</div></div></section>
+
+    <section className="section home-reviews-section"><div className="container"><SectionHeading eyebrow="A little love from our customers" title={<>Notes from <em>happy hearts</em></>} body="Every review is a little reminder of why we make things by hand." />{homeReviews.length ? <div className="reviews-grid">{homeReviews.map((review) => <article className="review-card" key={review.id}><PinkStars rating={Number(review.rating)} /><p>“{review.comment}”</p><div><strong>{review.customerName || 'Customer'}</strong><span>{review.productName || 'Especially For U'}</span></div></article>)}</div> : <GlassCard className="home-reviews-empty"><PinkStars rating={5} /><p>Customer reviews will appear here after they are approved by the studio.</p></GlassCard>}</div></section>
     <section className="final-cta"><div className="container"><div className="final-cta-card"><div className="sparkle sparkle-1">✦</div><div className="sparkle sparkle-2">✧</div><p className="eyebrow">A soft place for big ideas</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Bring the half-formed thought. We’ll bring the handmade magic.</p><Button as={Link} to="/custom-request" variant="light" icon={<ArrowUpRight size={17} />}>Create something custom</Button></div></div></section>
   </main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
-function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live }) {
+function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live: providedLive }) {
+  const live = providedLive || useLive();
   const { addToCart, onWish, wishlist } = useApp();
-  const products = live?.products?.length ? live.products : mockProducts;
-  const categories = live?.categories?.length ? live.categories : mockCategories;
+  const products = live?.products || [];
+  const categories = live?.categories || [];
   const params = new URLSearchParams(window.location.search);
   const [query, setQuery] = useState(params.get('q') || '');
   const [category, setCategory] = useState(params.get('category') || initialCategory);
@@ -383,18 +448,63 @@ function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live }) {
 
 function EmptyState({ title, body, onClick }) { return <GlassCard className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h3>{title}</h3><p>{body}</p>{onClick && <Button variant="secondary" onClick={onClick}>Reset the view</Button>}</GlassCard>; }
 
-function ProductPage({ live }) {
+function ProductReviewSection({ product }) {
+  const { token, user } = useAuth();
+  const [reviews, setReviews] = useState([]);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    fetch(`/api/reviews?productId=${encodeURIComponent(product.id)}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setReviews(data?.reviews || []))
+      .catch(() => setReviews([]));
+  }, [product.id]);
+  const average = reviews.length ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length : 0;
+  const submit = async (event) => {
+    event.preventDefault(); setError(''); setMessage(''); setSending(true);
+    try {
+      const response = await fetch('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ productId: product.id, rating, comment }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not submit your review.');
+      setSubmitted(true); setMessage(data.message || 'Thanks! Your review is waiting for studio approval.'); setComment('');
+    } catch (submitError) { setError(submitError.message || 'Could not submit your review.'); }
+    finally { setSending(false); }
+  };
+  return <section className="product-reviews" id="product-reviews">
+    <div className="review-section-heading"><div><p className="eyebrow">Kind words</p><h2>Reviews for <em>{product.name}</em></h2></div><div className="review-average"><strong>{average ? average.toFixed(1) : '—'}</strong><PinkStars rating={Math.round(average)} /><span>{reviews.length} review{reviews.length === 1 ? '' : 's'}</span></div></div>
+    <div className="product-review-layout"><div className="product-review-list">
+      {reviews.length ? reviews.map((review) => <article className="product-review-card" key={review.id}><div><PinkStars rating={Number(review.rating)} /><time>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}</time></div><p>{review.comment}</p><strong>{review.customerName || 'Customer'}</strong></article>) : <p className="review-empty">No approved reviews yet. Your experience could be the first one here.</p>}
+    </div><GlassCard className="review-form-card"><p className="eyebrow">Share a little love</p><h3>Leave a review</h3>{!token ? <p className="review-login-note">Please <Link to="/login">sign in</Link> to leave a review.</p> : submitted ? <p className="review-success">{message}</p> : <form onSubmit={submit}><label className="field-label">Your rating</label><PinkStars rating={rating} onChange={setRating} /><label className="field-label" htmlFor={`review-comment-${product.id}`}>Your comment</label><textarea id={`review-comment-${product.id}`} className="review-comment-input" value={comment} onChange={(event) => setComment(event.target.value)} minLength={3} maxLength={1200} required placeholder="What did you think of this piece?" /><small className="review-char-count">{comment.length}/1200</small>{error && <p className="review-error">{error}</p>}<Button type="submit" disabled={sending}>{sending ? 'Sending…' : 'Submit review'}</Button></form>}</GlassCard></div>
+  </section>;
+}
+
+function ProductPage({ live: providedLive }) {
+  const live = providedLive || useLive();
   const { slug } = useParams();
   const navigate = useNavigate();
   const { addToCart, onWish, wishlist } = useApp();
-  const products = live?.products?.length ? live.products : mockProducts;
-  const categories = live?.categories?.length ? live.categories : mockCategories;
-  const product = products.find((item) => item.slug === slug) || products[0] || mockProducts[0];
-  const [selected, setSelected] = useState(product.options?.map((option) => option.values[0].name) || []);
+  const products = live?.products || [];
+  const categories = live?.categories || [];
+  const product = products.find((item) => item.slug === slug) || null;
+  const [selected, setSelected] = useState([]);
   const [quantity, setQuantity] = useState(1);
-  const price = Number(product.price) + (product.options || []).reduce((sum, option, index) => sum + (option.values.find((value) => value.name === selected[index])?.adjustment || 0), 0);
-  const handleCta = () => navigate(`/custom-request?product=${product.slug}`);
-  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div><div className="gallery-thumbs"><button className="is-active"><img src={product.image} alt="" /></button><button><img src={media.collage} alt="" /></button><button><img src={media.product4} alt="" /></button></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => onWish(product)}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><div className="rating-row"><span className="stars">★★★★★</span><span>4.9 · 12 lovely reviews</span></div><PriceTag product={product} price={price} /><p className="detail-description">{product.description}</p>{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>Request this item</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  useEffect(() => { setSelected(product?.options?.map((option) => option.values?.[0]?.name || '') || []); }, [product?.id]);
+  const price = product ? Number(product.price) + (product.options || []).reduce((sum, option, index) => sum + (option.values.find((value) => value.name === selected[index])?.adjustment || 0), 0) : 0;
+  const handleCta = () => {
+    if (product.type === 'CUSTOM_QUOTE') return navigate(`/custom-request?product=${product.slug}`);
+    const selectedOptions = (product.options || []).map((option, index) => {
+      const value = option.values?.find((item) => item.name === selected[index]);
+      return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
+    }).filter(Boolean);
+    addToCart({ ...product, productId: product.id, price, selected: selectedOptions.map((option) => option.value), selectedOptions, quantity });
+    navigate('/checkout');
+  };
+  if (!product) return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><EmptyState title="Product not found" body="This item may have been removed from the shop." onClick={() => navigate('/shop')} /></main><Footer /></GradientBackground>;
+  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => onWish(product)}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><PriceTag product={product} price={price} /><p className="detail-description">{product.description}</p>{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>{product.type === 'CUSTOM_QUOTE' ? 'Request a quote' : 'Request this item'}</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button type="button" onClick={() => document.getElementById("product-reviews")?.scrollIntoView({ behavior: "smooth" })}>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><ProductReviewSection product={product} /><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CustomRequestPage() {
@@ -406,7 +516,7 @@ function CustomRequestPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', budget: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '' });
   const live = useLive();
-  const products = live?.products?.length ? live.products : mockProducts;
+  const products = live?.products || [];
   const currentSettings = live?.settings || storeSettings;
   const linkedProduct = products.find((item) => item.slug === new URLSearchParams(window.location.search).get('product'));
   useEffect(() => { if (linkedProduct) setForm((current) => ({ ...current, title: current.title || `Request: ${linkedProduct.name}` })); }, [linkedProduct?.id]);
@@ -478,20 +588,22 @@ function CheckoutPage() {
   const live = useLive();
   const currentSettings = live?.settings || storeSettings;
   const areaForMethod = delivery.method === 'campus' ? 'Campus handover, Muradnagar' : 'Home delivery, Muradnagar';
+  const cartSubtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1), 0);
+  const checkoutTotal = cartSubtotal + (delivery.method === 'home' && cartSubtotal < 1000 ? 50 : 0) + (contact.giftWrap ? Number(currentSettings.giftWrapPrice || 79) : 0);
   const handlePlaceOrder = async () => {
     setSubmitting(true); setSubmitError('');
     try {
-      const items = (cart.length ? cart : [{ productId: 'sample-p1', quantity: 1 }]).map((item) => ({
-        productId: item.productId || item.id || item.key || 'p1',
+      const items = cart.map((item) => ({
+        productId: item.productId || item.id || '',
         quantity: Number(item.quantity || 1),
-        selected: Array.isArray(item.selected) ? item.selected.map((label) => ({ label: String(label), value: String(label), adjustment: 0 })) : [],
+        selected: Array.isArray(item.selectedOptions) ? item.selectedOptions : (Array.isArray(item.selected) ? item.selected.map((label) => ({ label: String(label), value: String(label), adjustment: 0 })) : []),
         customization: item.customization || {},
       }));
       const body = {
         customer: {
-          name: contact.name.trim() || (user?.name?.trim() ? user.name.trim() : 'Customer Name'),
-          email: contact.email.trim() || (user?.email?.trim() ? user.email.trim() : 'customer@example.com'),
-          phone: contact.phone.trim() || (user?.phone?.trim() ? user.phone.trim() : '+919876543210'),
+          name: contact.name.trim(),
+          email: contact.email.trim(),
+          phone: contact.phone.trim(),
           note: contact.note?.trim() || '',
         },
         items,
@@ -536,10 +648,11 @@ function CheckoutPage() {
   if (currentSettings.storeStatus !== 'OPEN') return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">Checkout is taking a little pause</p><h1>We’re <em>fully booked</em> for now.</h1><p>{currentSettings.pauseMessage} Your cart is safe, and you can come back when the next slots open.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Keep browsing</Button></main><Footer /></GradientBackground>;
   if (success) {
     const advanceAmount = Number(createdOrder?.pricing?.advanceDue || createdOrder?.advance_due || Math.ceil(Number(createdOrder?.pricing?.total || createdOrder?.total || 0) / 2));
-    return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your request is in good hands</p><h1>Thank you, <em>{contact.name || 'lovely human'}.</em></h1><p>Order <strong>{createdOrder?.id}</strong> is saved. Pay the 50% advance and we’ll begin after we verify it.</p><GlassCard style={{ maxWidth: 560, margin: '22px auto', padding: 22, textAlign: 'left' }}><p className="eyebrow">UPI advance · {formatINR(advanceAmount)}</p>{currentSettings.upiQrImage ? <img src={currentSettings.upiQrImage} alt="Studio UPI QR code" style={{ display: 'block', width: 210, height: 210, objectFit: 'contain', background: '#fff', borderRadius: 14, padding: 8, margin: '0 auto 14px', border: '1px solid var(--line)' }} /> : <div style={{ padding: 18, borderRadius: 12, background: 'rgba(90,63,86,.05)', color: 'var(--muted)', textAlign: 'center' }}>The studio is setting up its QR code. Contact us in your order chat for payment details.</div>}{currentSettings.upiId && <p style={{ textAlign: 'center' }}>UPI ID: <strong>{currentSettings.upiId}</strong></p>}<p style={{ color: 'var(--muted)', fontSize: 13 }}>{currentSettings.paymentInstructions || 'Pay by UPI. The studio will confirm after checking the account.'}</p>{paymentReported ? <Badge tone="icy">Payment reported · awaiting studio verification</Badge> : <><label className="floating-field" style={{ marginTop: 12 }}><input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder=" " /><span>UPI transaction reference (optional)</span></label><Button onClick={reportAdvance} disabled={reportingPayment} className="full-button" style={{ marginTop: 10 }}>{reportingPayment ? 'Sending…' : `I’ve sent ${formatINR(advanceAmount)}`}</Button></>}{paymentReportError && <p role="alert" style={{ color: '#c55a83' }}>{paymentReportError}</p>}</GlassCard><GlassCard className="order-success-card"><div><span>Ready by</span><strong>{createdOrder?.estimatedDate || createdOrder?.estimated_date ? new Date(createdOrder.estimatedDate || createdOrder.estimated_date).toLocaleDateString() : (delivery.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : 'Set by studio soon')}</strong></div><div><span>Delivery</span><strong>{delivery.method === 'campus' ? 'Campus handover' : 'Home delivery'}</strong></div><div><span>Payment status</span><strong>{paymentReported ? 'Awaiting verification' : 'Advance due'}</strong></div></GlassCard><Button as={Link} to="/track-order" icon={<ArrowRight size={17} />}>Track your order</Button></main><Footer /></GradientBackground>;
+    return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your request is in good hands</p><h1>Thank you, <em>{contact.name || 'lovely human'}.</em></h1><p>Order <strong>{createdOrder?.id}</strong> is saved. Pay the 50% advance, then chat with the studio about any details.</p><GlassCard style={{ maxWidth: 560, margin: '22px auto', padding: 22, textAlign: 'left' }}><p className="eyebrow">UPI advance · {formatINR(advanceAmount)}</p>{currentSettings.upiQrImage ? <img src={currentSettings.upiQrImage} alt="Studio UPI QR code" style={{ display: 'block', width: 210, height: 210, objectFit: 'contain', background: '#fff', borderRadius: 14, padding: 8, margin: '0 auto 14px', border: '1px solid var(--line)' }} /> : <div style={{ padding: 18, borderRadius: 12, background: 'rgba(90,63,86,.05)', color: 'var(--muted)', textAlign: 'center' }}>The studio is setting up its QR code. Contact us in your order chat for payment details.</div>}{currentSettings.upiId && <p style={{ textAlign: 'center' }}>UPI ID: <strong>{currentSettings.upiId}</strong></p>}<p style={{ color: 'var(--muted)', fontSize: 13 }}>{currentSettings.paymentInstructions || 'Pay by UPI. The studio will confirm after checking the account.'}</p>{paymentReported ? <><Badge tone="icy">Payment reported · awaiting studio verification</Badge><Button as={Link} to={`/account/orders/${createdOrder?.id}/chat`} icon={<MessageCircle size={16} />} className="full-button" style={{ marginTop: 12 }}>Chat with the studio</Button></> : <><label className="floating-field" style={{ marginTop: 12 }}><input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder=" " /><span>UPI transaction reference (optional)</span></label><Button onClick={reportAdvance} disabled={reportingPayment} className="full-button" style={{ marginTop: 10 }}>{reportingPayment ? 'Sending…' : `I’ve sent ${formatINR(advanceAmount)}`}</Button></>}{paymentReportError && <p role="alert" style={{ color: '#c55a83' }}>{paymentReportError}</p>}</GlassCard><GlassCard className="order-success-card"><div><span>Ready by</span><strong>{createdOrder?.estimatedDate || createdOrder?.estimated_date ? new Date(createdOrder.estimatedDate || createdOrder.estimated_date).toLocaleDateString() : (delivery.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : 'Set by studio soon')}</strong></div><div><span>Delivery</span><strong>{delivery.method === 'campus' ? 'Campus handover' : 'Home delivery'}</strong></div><div><span>Payment status</span><strong>{paymentReported ? 'Awaiting verification' : 'Advance due'}</strong></div></GlassCard>{paymentReported && <Button as={Link} to={`/account/orders/${createdOrder?.id}/chat`} icon={<MessageCircle size={17} />}>Open order chat</Button>}</main><Footer /></GradientBackground>;
   }
+  if (!cart.length) return <GradientBackground variant="cart"><Navbar cartCount={0} /><main className="container checkout-page"><EmptyState title="Your cart is empty" body="Choose a product first, then we’ll collect your delivery details and payment." onClick={() => window.location.assign('/shop')} /></main><Footer /></GradientBackground>;
   const steps = ['Contact', 'Delivery', 'Payment', 'Review & pay'];
-  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-page"><div className="checkout-header"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Almost yours</p><h1>Let’s make it <em>official.</em></h1></div><div className="checkout-secure"><Check size={14} /> Secure checkout</div></div><div className="checkout-stepper">{steps.map((item, index) => <div className={`checkout-step ${step >= index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={13} /> : index + 1}</span><strong>{item}</strong>{index < steps.length - 1 && <i />}</div>)}</div><div className="checkout-layout"><GlassCard className="checkout-card">{step === 1 && <CheckoutContact contact={contact} setContact={setContact} />}{step === 2 && <CheckoutDelivery delivery={delivery} setDelivery={setDelivery} />}{step === 3 && <CheckoutPayment />}{step === 4 && <CheckoutReview contact={contact} delivery={delivery} />}</GlassCard><GlassCard className="checkout-summary"><p className="eyebrow">Your pieces</p>{cart.length ? cart.map((item) => <div className="checkout-item" key={item.key}><img src={item.image} alt="" /><div><strong>{item.name}</strong><span>Qty {item.quantity}</span></div><b>{formatINR(item.price * item.quantity)}</b></div>) : <div className="checkout-item"><div><strong>Sample order preview</strong><span>Add an item from Shop to personalise this.</span></div><b>₹899</b></div>}<div className="summary-total"><span>Total</span><strong>{formatINR(cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899)}</strong></div><p className="summary-note"><Truck size={15} /> Muradnagar only · campus or home delivery</p></GlassCard></div><div className="checkout-actions">{step > 1 && <Button variant="ghost" onClick={() => setStep(step - 1)}><ChevronLeft size={16} /> Back</Button>}{submitError && <span style={{ color: '#c55a83', fontSize: 13, alignSelf: 'center' }}>{submitError}</span>}<Button onClick={() => step === 4 ? handlePlaceOrder() : setStep(step + 1)} icon={<ArrowRight size={16} />} disabled={submitting}>{submitting ? 'Placing order…' : (step === 4 ? 'Pay securely' : 'Continue')}</Button></div></main></GradientBackground>;
+  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-page"><div className="checkout-header"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Almost yours</p><h1>Let’s make it <em>official.</em></h1></div><div className="checkout-secure"><Check size={14} /> Secure checkout</div></div><div className="checkout-stepper">{steps.map((item, index) => <div className={`checkout-step ${step >= index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={13} /> : index + 1}</span><strong>{item}</strong>{index < steps.length - 1 && <i />}</div>)}</div><div className="checkout-layout"><GlassCard className="checkout-card">{step === 1 && <CheckoutContact contact={contact} setContact={setContact} />}{step === 2 && <CheckoutDelivery delivery={delivery} setDelivery={setDelivery} />}{step === 3 && <CheckoutPayment total={checkoutTotal} />}{step === 4 && <CheckoutReview contact={contact} delivery={delivery} />}</GlassCard><GlassCard className="checkout-summary"><p className="eyebrow">Your pieces</p>{cart.map((item) => <div className="checkout-item" key={item.key}><img src={item.image} alt="" /><div><strong>{item.name}</strong><span>Qty {item.quantity}</span></div><b>{formatINR(item.price * item.quantity)}</b></div>)}<div className="summary-total"><span>Total</span><strong>{formatINR(checkoutTotal)}</strong></div><p className="summary-note"><Truck size={15} /> Muradnagar only · campus or home delivery</p></GlassCard></div><div className="checkout-actions">{step > 1 && <Button variant="ghost" onClick={() => setStep(step - 1)}><ChevronLeft size={16} /> Back</Button>}{submitError && <span style={{ color: '#c55a83', fontSize: 13, alignSelf: 'center' }}>{submitError}</span>}<Button onClick={() => step === 4 ? handlePlaceOrder() : setStep(step + 1)} icon={<ArrowRight size={16} />} disabled={submitting}>{submitting ? 'Placing order…' : (step === 4 ? 'Place order & continue to payment' : 'Continue')}</Button></div></main></GradientBackground>;
 }
 
 function CheckoutContact({ contact, setContact }) {
@@ -556,14 +669,12 @@ function CheckoutDelivery({ delivery, setDelivery }) {
 <div className="delivery-methods"><button type="button" className={`delivery-method ${delivery.method === 'campus' ? 'is-selected' : ''}`} onClick={() => setField('method', 'campus')}><Package size={19} /><span><strong>Campus handover</strong><small>KIET / Muradnagar campus spot · Free</small></span>{delivery.method === 'campus' && <Check size={16} />}</button><button type="button" className={`delivery-method ${delivery.method === 'home' ? 'is-selected' : ''}`} onClick={() => setField('method', 'home')}><Truck size={19} /><span><strong>Home delivery</strong><small>Local Muradnagar address · ₹50 or free above ₹1,000</small></span>{delivery.method === 'home' && <Check size={16} />}</button></div>
 <div className="form-grid"><label className="floating-field"><input required placeholder=" " value={delivery.pickupLocation} onChange={(e) => setField('pickupLocation', e.target.value.trim())} /><span>{delivery.method === 'campus' ? 'Pickup Location (campus gate / spot / landmark)' : 'Pickup Location (building / gate)'}</span></label><label className="floating-field"><input required placeholder=" " value={delivery.location} onChange={(e) => setField('location', e.target.value.trim())} /><span>{delivery.method === 'campus' ? 'Location (KIET, Muradnagar)' : 'Location (full address / area)'}</span></label></div>
 <div className="form-grid"><label className="floating-field"><input required type="date" min={todayStr} placeholder=" " value={delivery.pickupDate} onChange={(e) => setField('pickupDate', e.target.value)} /><span>Pickup Date</span></label><label className="floating-field"><input required placeholder=" " value={delivery.slotId || ''} onChange={(e) => setField('slotId', e.target.value.trim())} /><span>Delivery slot / contact phone</span></label></div>
-<div className="ready-by"><Clock3 size={17} /><span>Ready by will be updated by the studio team. You'll see it on your order tracker under <strong>Estimated Date</strong>.</span></div></div>;
+<div className="ready-by"><Clock3 size={17} /><span>The studio will confirm your ready date and status in your account after reviewing the order.</span></div></div>;
 }
 
-function CheckoutPayment() {
-  const { cart } = useApp();
+function CheckoutPayment({ total }) {
   const live = useLive();
   const settings = live?.settings || storeSettings;
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899;
   const advance = Math.ceil(total * 0.5);
   return <div className="checkout-section"><p className="form-step">03 / 04</p><h2>Pay a 50% advance.</h2><p className="checkout-subtitle">Place your order, then use the studio’s UPI QR code. We’ll begin once we verify the payment.</p><div className="payment-policy-note"><ShieldCheck size={17} /><span>{formatINR(total)} order · {formatINR(advance)} advance now · {formatINR(total - advance)} balance at handover</span></div><div className="payment-options"><div className="payment-option is-selected"><div className="payment-icon"><Tag size={19} /></div><div><strong>UPI QR · studio verified</strong><span>{settings.upiId ? `Pay to ${settings.upiId}` : 'QR and payment instructions appear after you place the order.'}</span></div><Check size={16} /></div></div><div className="payment-policy-note" style={{ marginTop: 12 }}>{settings.paymentInstructions || 'The studio will confirm when your advance arrives.'}</div></div>;
 }
@@ -572,19 +683,103 @@ function CheckoutReview({ contact, delivery }) {
   return <div className="checkout-section"><p className="form-step">04 / 04</p><h2>One last little look.</h2><p className="checkout-subtitle">Make sure everything feels right before you pay.</p><div className="review-summary"><div><span>Contact</span><strong>{contact?.name || 'Customer'} · {contact?.phone || 'Phone'}</strong><button type="button">Edit</button></div><div><span>Delivery</span><strong>{(delivery?.pickupLocation || 'Pickup spot')} · {(delivery?.location || (delivery?.method === 'campus' ? 'KIET, Muradnagar' : 'Muradnagar address'))}</strong><button type="button">Edit</button></div><div><span>Pickup Date</span><strong>{delivery?.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : '—'}</strong><button type="button">Edit</button></div><div><span>Gift</span><strong>{contact?.isGift ? `Gift: ${contact.recipientName || 'recipient'}${contact.giftWrap ? ' · Gift wrap' : ''}` : 'Not a gift · surprise delivery off'}</strong><button type="button">Edit</button></div></div><div className="agree-row"><span className="checkbox is-checked"><Check size={12} /></span><span>I understand handmade pieces may have tiny, lovely variations and custom pieces become non-returnable once production starts.</span></div></div>;
 }
 
+function CustomerOrders({ token }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    fetch('/api/orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Could not load your orders.');
+        setOrders(data.orders || []);
+      })
+      .catch((err) => setError(err.message || 'Could not load your orders.'))
+      .finally(() => setLoading(false));
+  }, [token]);
+  return <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your orders</p><h2>Order updates</h2></div></div>
+    {error && <div role="alert">{error}</div>}
+    {loading ? <p>Loading your orders…</p> : orders.length ? <div className="account-order-list">{orders.map((order) => <GlassCard className="account-order-card" key={order.id}>
+      <div className="order-card-top"><div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{String(order.status || 'PENDING').replaceAll('_', ' ')}</Badge><span className="order-number">{order.id}</span></div><strong>{formatINR(Number(order.total || 0))}</strong></div>
+      <div className="account-order-details"><span><MapPin size={14} /> {order.deliveryArea || 'Delivery details in order'}</span><span>Placed {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'recently'}</span><span>Ready by {order.estimatedDate ? new Date(order.estimatedDate).toLocaleDateString() : 'To be confirmed'}</span></div>
+      <div className="account-order-payment"><strong>{order.paymentStatus || 'PENDING'}</strong><span>Paid {formatINR(Number(order.paidAmount || 0))} · Due {formatINR(Number(order.balanceDue ?? Math.max(0, Number(order.total || 0) - Number(order.paidAmount || 0))))}</span></div>
+      <Link className="account-order-chat-link" to={`/account/orders/${encodeURIComponent(order.id)}/chat`}><MessageCircle size={15} /> Message the studio <ArrowRight size={14} /></Link>
+    </GlassCard>)}</div> : <EmptyState title="No orders yet" body="Orders you place will appear here with their payment and delivery status." />}
+  </div>;
+}
+
+function CustomerMessages({ token }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch('/api/orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setOrders(data?.orders || []))
+      .catch(() => setOrders([])).finally(() => setLoading(false));
+  }, [token]);
+  return <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Private order chats</p><h2>Messages with the studio</h2></div></div>{loading ? <p>Loading your chats…</p> : orders.length ? <div className="account-order-list">{orders.map((order) => <GlassCard className="account-message-row" key={order.id}><div><MessageCircle size={18} /><div><strong>Order {order.id}</strong><span>{String(order.status || 'PENDING').replaceAll('_', ' ')} · {order.paymentStatus || 'PAYMENT PENDING'}</span></div></div><Link to={`/account/orders/${encodeURIComponent(order.id)}/chat`}>Open chat <ArrowRight size={14} /></Link></GlassCard>)}</div> : <EmptyState title="No chats yet" body="After you place an order, you can message the studio about colours, additions, or delivery." />}</div>;
+}
+
+function OrderChatPage() {
+  const { id } = useParams();
+  const { token } = useAuth();
+  const [order, setOrder] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [orderResponse, chatResponse] = await Promise.all([fetch(`/api/orders/${encodeURIComponent(id)}`, { headers }), fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { headers })]);
+      const orderData = await orderResponse.json().catch(() => ({}));
+      const chatData = await chatResponse.json().catch(() => ({}));
+      if (!orderResponse.ok) throw new Error(orderData.message || 'Could not load this order.');
+      if (!chatResponse.ok) throw new Error(chatData.message || chatData.error || 'Could not load this chat.');
+      setOrder(orderData.order); setMessages(chatData.messages || []); setError('');
+    } catch (loadError) { setError(loadError.message || 'Could not load this order chat.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => {
+    load();
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) setMessages(data.messages || []);
+      } catch { /* keep the last messages visible */ }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [id, token]);
+  const send = async (event) => {
+    event.preventDefault(); const message = text.trim(); if (!message) return;
+    try {
+      const response = await fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ message }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Message could not be sent.');
+      setText(''); setMessages((current) => [...current, data.message]); setError('');
+    } catch (sendError) { setError(sendError.message || 'Message could not be sent.'); }
+  };
+  const total = Number(order?.total ?? order?.pricing?.total ?? 0);
+  const paid = Number(order?.paidAmount ?? order?.paid_amount ?? 0);
+  const status = order?.paymentStatus || order?.payment_status || 'PENDING';
+  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container order-chat-page"><Link className="back-link" to="/account"><ChevronLeft size={15} /> Back to your account</Link>{loading ? <GlassCard className="order-chat-panel"><p>Opening your order chat…</p></GlassCard> : error ? <GlassCard className="order-chat-panel"><p className="review-error">{error}</p><Link to="/account">Return to your account</Link></GlassCard> : order && <GlassCard className="order-chat-panel"><header className="order-chat-header"><div><p className="eyebrow">Private order chat</p><h1>Order <em>{id}</em></h1><p>{order.items?.map((item) => item.productName).join(', ') || 'Your handmade order'}</p></div><div className="order-chat-status"><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{String(order.status || 'PENDING').replaceAll('_', ' ')}</Badge><span>{status.replaceAll('_', ' ')}</span><small>Paid {formatINR(paid)} · Due {formatINR(Math.max(0, total - paid))}</small></div></header><div className="order-chat-note"><strong>Need a colour change or a small addition?</strong><span>Send it here and the studio will reply in this order chat.</span></div><div className="order-chat-messages">{messages.length ? messages.map((message) => <article key={message.id} className={`order-chat-message ${message.senderRole === 'CUSTOMER' ? 'from-customer' : 'from-studio'}`}><small>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {message.createdAt ? new Date(message.createdAt).toLocaleString() : ''}</small><p>{message.message}</p></article>) : <p className="order-chat-empty">Your chat is ready. Send the studio your preferences or questions about this order.</p>}</div><form className="order-chat-form" onSubmit={send}><textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={3000} rows={2} placeholder="Message the studio about this order…" required /><Button type="submit" disabled={!text.trim()} icon={<Send size={15} />}>Send</Button></form>{error && <p className="review-error" role="alert">{error}</p>}</GlassCard>}</main><Footer /><WhatsAppFloat /></GradientBackground>;
+}
+
 function AccountPage() {
   const [tab, setTab] = useState('Orders');
   const [requestList, setRequestList] = useState([]);
-  const tabs = ['Orders', 'Custom Requests', 'Wishlist', 'Addresses', 'Profile'];
+  const tabs = ['Orders', 'Messages', 'Custom Requests', 'Wishlist', 'Addresses', 'Profile'];
+  const { wishlist, addToCart, onWish } = useApp();
   const live = useLive();
-  const products = live?.products?.length ? live.products : mockProducts;
+  const products = live?.products || [];
   const { user, token } = useAuth();
   useEffect(() => {
     fetch('/api/custom-requests/mine', { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => response.ok ? response.json() : null).then((data) => setRequestList(data?.requests || [])).catch(() => {});
   }, [token]);
   const displayName = user?.name || 'Lovely human';
-  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && <span>3</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your recent orders</p><h2>Little things, on their way.</h2></div><Link to="/track-order">Track an order <ArrowUpRight size={15} /></Link></div><div className="account-order-list">{sampleOrders.slice(0, 2).map((order) => <GlassCard className="account-order-card" key={order.id}><div className="order-card-top"><div><Badge tone={order.status === 'IN PRODUCTION' ? 'blush' : 'icy'}>{order.status}</Badge><span className="order-number">{order.id}</span></div><strong>{formatINR(order.total)}</strong></div><div className="order-card-main"><img src={products.find((product) => product.name === order.item)?.image || media.product1} alt="" /><div><h3>{order.item}</h3><p>Placed {order.date} · {order.payment.toLowerCase()}</p><Timeline compact /></div></div><div className="order-card-bottom"><span><MapPin size={15} /> {order.location || 'Muradnagar delivery'} {order.locationApproval === 'PENDING' && <Badge tone="soft">Approval pending</Badge>}</span><span>{order.balanceDue ? `${formatINR(order.balanceDue)} balance due` : 'Paid in full'}</span><Link to="/track-order">View details <ArrowRight size={15} /></Link></div>{order.status === 'CONFIRMED' && <button className="cancel-order-link">Cancel order · refund suggestion shown before confirming</button>}</GlassCard>)}</div></div>}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{requestList.length ? requestList.map((request) => <GlassCard className="request-row" key={request.id}><img src={media.collage} alt="" /><div><Badge tone={request.status === 'QUOTE_SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy || 'Not set'} · Phone {request.phone || user?.phone || '—'}</p>{request.quote?.amount && <strong>Quote: {formatINR(Number(request.quote.amount))}</strong>}<Link to={`/account/requests/${request.id}`} style={{ display: 'inline-flex', gap: 6, marginTop: 8 }}>Open request chat <ArrowRight size={14} /></Link></div></GlassCard>) : <EmptyState title="No custom requests yet" body="Send an idea and we’ll keep the conversation here." />}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div><div className="product-grid">{products.slice(0, 3).map((product) => <ProductCard product={product} key={product.id} onAdd={useApp().addToCart} onWish={useApp().onWish} isWished />)}</div></div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={tab === 'Addresses' ? (user?.name || 'Customer') : (user?.name || 'Customer')} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || '+91 98 7654 3210'} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? 'Civil Lines, Muradnagar' : (user?.email || 'user@example.com')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && wishlist.length > 0 && <span>{wishlist.length}</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <CustomerOrders token={token} />}{tab === 'Messages' && <CustomerMessages token={token} />}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{requestList.length ? requestList.map((request) => <GlassCard className="request-row" key={request.id}><div><Badge tone={request.status === 'QUOTE_SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy || 'Not set'} · Phone {request.phone || user?.phone || '—'}</p>{request.quote?.amount && <strong>Quote: {formatINR(Number(request.quote.amount))}</strong>}<Link to={`/account/requests/${request.id}`} style={{ display: 'inline-flex', gap: 6, marginTop: 8 }}>Open request chat <ArrowRight size={14} /></Link></div></GlassCard>) : <EmptyState title="No custom requests yet" body="Send an idea and we’ll keep the conversation here." />}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div>{products.some((product) => wishlist.includes(product.id)) ? <div className="product-grid">{products.filter((product) => wishlist.includes(product.id)).map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished />)}</div> : <EmptyState title="Your wishlist is empty" body="Save products you like and they’ll appear here." />}</div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={user?.name || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? '' : (user?.email || '')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function RequestConversationPage() {
@@ -630,12 +825,12 @@ function RequestConversationPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || 'Could not accept quote.');
       setAcceptedOrder(data.order); setError('');
-      navigate(`/track-order?order=${encodeURIComponent(data.order.id)}`);
+      navigate(`/account/orders/${encodeURIComponent(data.order.id)}/chat`);
     } catch (err) { setError(err.message || 'Could not accept quote.'); }
   };
   return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} /><main className="container track-page"><section className="track-card" style={{ maxWidth: 760, textAlign: 'left' }}><p className="eyebrow">Your custom idea</p><h1 style={{ fontSize: 48 }}>{request?.title || 'Request chat'}</h1><p>{id} · {request?.status || 'Loading'}</p>
     {request?.referenceUrls?.length > 0 && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0' }}>{request.referenceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: '#995f83', fontSize: 13 }}>Open reference {index + 1} ↗</a>)}</div>}
-    {request?.quote && <GlassCard style={{ padding: 16, marginBottom: 16 }}><strong>Studio quote</strong><p style={{ margin: '6px 0 0' }}>{formatINR(Number(request.quote.amount || request.quote.total || 0))} · {request.quote.note || request.quote.message || 'Reply here if you have questions.'}</p>{request.status === 'QUOTE_SENT' && <Button onClick={acceptQuote} style={{ marginTop: 12 }}>Accept quote · pay 50% advance</Button>}{acceptedOrder && <p>Order {acceptedOrder.id} created. <Link to={`/track-order?order=${acceptedOrder.id}`}>Open order tracker</Link></p>}</GlassCard>}
+    {request?.quote && <GlassCard style={{ padding: 16, marginBottom: 16 }}><strong>Studio quote</strong><p style={{ margin: '6px 0 0' }}>{formatINR(Number(request.quote.amount || request.quote.total || 0))} · {request.quote.note || request.quote.message || 'Reply here if you have questions.'}</p>{request.status === 'QUOTE_SENT' && <Button onClick={acceptQuote} style={{ marginTop: 12 }}>Accept quote · pay 50% advance</Button>}{acceptedOrder && <p>Order {acceptedOrder.id} created. <Link to={`/account/orders/${encodeURIComponent(acceptedOrder.id)}/chat`}>Open order chat</Link></p>}</GlassCard>}
     {loading ? <p>Loading your conversation…</p> : <div style={{ display: 'grid', gap: 10, padding: 14, maxHeight: 420, overflowY: 'auto', borderRadius: 16, background: 'rgba(255,255,255,.62)' }}>{messages.length ? messages.map((message) => <div key={message.id} style={{ justifySelf: message.senderRole === 'CUSTOMER' ? 'end' : 'start', maxWidth: '88%', padding: '12px 14px', borderRadius: 14, background: message.senderRole === 'CUSTOMER' ? 'rgba(255,175,204,.22)' : 'rgba(62,142,126,.1)' }}><small>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {new Date(message.createdAt).toLocaleString()}</small><p style={{ margin: '5px 0 0', whiteSpace: 'pre-wrap' }}>{message.message}</p></div>) : <p style={{ margin: 0, color: 'var(--muted)' }}>Your idea is in the studio inbox. Send a message here any time.</p>}</div>}
     {error && <div role="alert" style={{ marginTop: 12, color: '#c55a83' }}>{error}</div>}
     <form onSubmit={send} style={{ display: 'grid', gap: 10, marginTop: 16 }}><label className="floating-field floating-textarea"><textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder=" " /><span>Write a message to the studio…</span></label><Button type="submit" className="full-button" icon={<Send size={15} />}>Send message</Button></form>
@@ -653,7 +848,7 @@ function TrackOrderPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   const live = useLive();
-  const products = live?.products?.length ? live.products : mockProducts;
+  const products = live?.products || [];
 
   const fetchMessages = async (id) => {
     try {
@@ -810,7 +1005,7 @@ function ContentPage() {
   const { slug } = useParams();
   const faqPage = slug === 'faq';
   const page = cmsPages.find((item) => item.slug === slug) || cmsPages[0];
-  return <GradientBackground variant="about"><Navbar cartCount={useApp().cart.length} /><main className="container content-page"><section className="page-intro compact-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Especially For U · {faqPage ? 'Helpful little answers' : 'Editable studio page'}</p><h1>{faqPage ? <>Questions, answered <em>softly.</em></> : <>{page.title} <em>with care.</em></>}</h1><p>{faqPage ? 'A few things customers ask before making something personal.' : page.meta}</p></div><Badge tone={page.status === 'Published' ? 'icy' : 'soft'}>{page.status || 'Published'}</Badge></section><GlassCard className="content-document"><p className="review-before">REVIEW BEFORE PUBLISHING · This CMS-lite copy is starter content for the studio team.</p>{faqPage ? <div className="faq-list">{faqs.map((faq) => <details key={faq.question}><summary>{faq.question}<ChevronDown size={16} /></summary><p>{faq.answer}</p></details>)}</div> : <><h2>{page.title}</h2><p>Especially For U is a small handmade studio run by college students in Muradnagar. We make gifts, keepsakes and custom pieces slowly, with clear communication and care.</p><h3>Good to know</h3><ul><li>We deliver only inside Muradnagar at launch, including KIET campus handovers and listed local areas.</li><li>Handmade items vary slightly in colour and finish. Custom pieces are non-returnable once production starts.</li><li>Customers confirm they have the right to use any uploaded image or design, and the studio may decline requests that copy protected work.</li></ul><h3>Need to ask something?</h3><p>Email <a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a> or <a href="https://wa.me/919999999999">WhatsApp the studio</a>. We usually reply within 1–2 days.</p></>}</GlassCard></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="about"><Navbar cartCount={useApp().cart.length} /><main className="container content-page"><section className="page-intro compact-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Especially For U · {faqPage ? 'Helpful little answers' : 'Editable studio page'}</p><h1>{faqPage ? <>Questions, answered <em>softly.</em></> : <>{page.title} <em>with care.</em></>}</h1><p>{faqPage ? 'A few things customers ask before making something personal.' : page.meta}</p></div><Badge tone={page.status === 'Published' ? 'icy' : 'soft'}>{page.status || 'Published'}</Badge></section><GlassCard className="content-document"><p className="review-before">REVIEW BEFORE PUBLISHING · This CMS-lite copy is starter content for the studio team.</p>{faqPage ? <div className="faq-list">{faqs.map((faq) => <details key={faq.question}><summary>{faq.question}<ChevronDown size={16} /></summary><p>{faq.answer}</p></details>)}</div> : <><h2>{page.title}</h2><p>Especially For U is a small handmade studio run by college students in Muradnagar. We make gifts, keepsakes and custom pieces slowly, with clear communication and care.</p><h3>Good to know</h3><ul><li>We deliver only inside Muradnagar at launch, including KIET campus handovers and listed local areas.</li><li>Handmade items vary slightly in colour and finish. Custom pieces are non-returnable once production starts.</li><li>Customers confirm they have the right to use any uploaded image or design, and the studio may decline requests that copy protected work.</li></ul><h3>Need to ask something?</h3><p>Email <a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a> or <a href="https://wa.me/919997837648">WhatsApp the studio</a>. We usually reply within 1–2 days.</p></>}</GlassCard></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function fileToBase64(file) {
@@ -922,6 +1117,7 @@ function AdminProductsPanel() {
         setFormMsg({ type: 'success', text: `Created “${payload.name}”.` });
       }
       await refresh();
+      window.dispatchEvent(new Event('efu:catalog-updated'));
       if (!editing) {
         setForm((f) => ({ ...f, name: '', slug: '', image: '', description: '' }));
       }
@@ -950,6 +1146,7 @@ function AdminProductsPanel() {
     try {
       await req('DELETE', `/api/admin/products/${deleteConfirm.id}`);
       setItems((list) => list.map((it) => it.id === deleteConfirm.id ? { ...it, isActive: false } : it));
+      window.dispatchEvent(new Event('efu:catalog-updated'));
       setFormMsg({ type: 'success', text: `Archived “${deleteConfirm.name}”.` });
     } catch (err) { setFormMsg({ type: 'error', text: err.message || 'Could not archive product.' }); }
     setDeleteConfirm(null);
@@ -959,6 +1156,7 @@ function AdminProductsPanel() {
     try {
       await req('PATCH', `/api/admin/products/${p.id}`, { isActive: !p.isActive });
       setItems((list) => list.map((it) => it.id === p.id ? { ...it, isActive: !p.isActive } : it));
+      window.dispatchEvent(new Event('efu:catalog-updated'));
     } catch (err) { setFormMsg({ type: 'error', text: err.message }); }
   };
 
@@ -1627,6 +1825,45 @@ function AdminCustomRequestsPanel({ onMessages }) {
   })}</div> : <EmptyState title="No custom requests yet" body="Customer ideas and their reference files will appear here." />}</div>;
 }
 
+function AdminReviewsPanel() {
+  const token = localStorage.getItem('efu_admin_token') || '';
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const load = async () => {
+    setLoading(true); setError('');
+    try {
+      const response = await fetch('/api/admin/reviews', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not load reviews.');
+      setItems(data.reviews || []);
+    } catch (loadError) { setError(loadError.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const moderate = async (review, status) => {
+    try {
+      const response = await fetch(`/api/admin/reviews/${review.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ status }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not update review.');
+      await load(); setNotice(status === 'APPROVED' ? 'Review published.' : 'Review hidden from shoppers.');
+    } catch (moderationError) { setError(moderationError.message); }
+  };
+  const remove = async (review) => {
+    try {
+      const response = await fetch(`/api/admin/reviews/${review.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not delete review.');
+      await load(); setNotice('Review deleted.');
+    } catch (deleteError) { setError(deleteError.message); }
+  };
+  return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><Star size={15} /> {items.length} customer review{items.length === 1 ? '' : 's'} · approve to show on the website</span><Button variant="secondary" icon={<RefreshCw size={14} />} onClick={load}>Refresh</Button></div>
+    {error && <p className="review-error">{error}</p>}{notice && <p className="review-success">{notice}</p>}
+    {loading ? <p>Loading reviews…</p> : items.length ? <div className="admin-review-list">{items.map((review) => <GlassCard className="admin-review-card" key={review.id}><div className="admin-review-top"><div><PinkStars rating={Number(review.rating)} /><Badge tone={review.status === 'APPROVED' ? 'icy' : review.status === 'REJECTED' ? 'soft' : 'blush'}>{review.status}</Badge></div><small>{review.createdAt ? new Date(review.createdAt).toLocaleString() : ''}</small></div><h3>{review.productName || 'Deleted product'}</h3><p>{review.comment}</p><div className="admin-review-bottom"><span>{review.customerName || 'Customer'}</span><div>{review.status !== 'APPROVED' && <Button variant="mini" onClick={() => moderate(review, 'APPROVED')}>Approve</Button>}{review.status === 'APPROVED' && <Button variant="secondary" onClick={() => moderate(review, 'REJECTED')}>Hide</Button>}<button className="review-delete-button" onClick={() => remove(review)}>Delete</button></div></div></GlassCard>)}</div> : <EmptyState title="No reviews yet" body="Customer reviews will appear here for approval." />}
+  </div>;
+}
+
 function AdminOpsPanel({ tab, setTab }) {
   if (tab === 'Products') return <AdminProductsPanel />;
   if (tab === 'Categories') return <AdminCategoriesPanel />;
@@ -1635,108 +1872,36 @@ function AdminOpsPanel({ tab, setTab }) {
   if (tab === 'Custom Requests') return <AdminCustomRequestsPanel onMessages={() => setTab('Messages')} />;
   if (tab === 'Team') return <AdminTeamPanel />;
   if (tab === 'Payment Setup') return <AdminPaymentSetupPanel />;
-  if (tab === 'Orders') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Today’s deliveries</button><button>Payment pending</button><button>Location approvals pending</button><button><Download size={14} /> Export CSV</button></div><div className="ops-attention-grid">{adminNeedsAttention.map((item) => <GlassCard className="attention-card" key={item.label}><Badge tone={item.tone}>{item.label}</Badge><strong>{item.detail}</strong><div className="attention-actions"><button>Open detail</button><button className="icon-button"><PhoneCall size={14} /></button></div></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Order control</p><h2>Search, approve, update</h2></div><div className="global-search"><Search size={15} /><input placeholder="Order, phone, name or request ID" /></div></div>{sampleOrders.map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.customer} · {order.item}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge><span>{order.locationApproval === 'PENDING' ? 'Location pending' : 'KIET · Main Gate'}</span><button className="small-link">Update status <ChevronDown size={13} /></button></div>)}</GlassCard></div>;
-  if (tab === 'Custom Requests') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Awaiting my quote</button><button>Quote expiring soon</button><button><MessageCircle size={14} /> WhatsApp customer</button></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Quote workflow</p><h2>Requests needing a reply</h2></div><Button variant="secondary" icon={<Plus size={15} />}>New quote</Button></div>{sampleRequests.map((request) => <div className="ops-request-row" key={request.id}><img src={request.image} alt="" /><div><strong>{request.id} · {request.title}</strong><span>{request.customer} · {request.budget} · needed by {request.neededBy}</span></div><Badge tone={request.status === 'QUOTE SENT' ? 'blush' : 'soft'}>{request.status}</Badge><div className="row-actions"><button>Ask customer</button><button className="button button-mini">Send quote</button></div></div>)}</GlassCard></div>;
-  if (tab === 'Delivery Areas' || tab === 'Delivery Slots') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><MapPin size={15} /> Muradnagar only · manual locations do not block order creation</span><Button variant="secondary" icon={<Plus size={15} />}>Add area</Button></div><div className="ops-card-grid">{deliveryAreas.map((area, index) => <GlassCard className="area-card" key={area}><div className="area-card-top"><Badge tone={index === 0 ? 'icy' : 'soft'}>{index === 0 ? 'CAMPUS' : area.startsWith('Other') ? 'MANUAL' : 'AREA'}</Badge><button className="icon-button"><Edit3 size={14} /></button></div><h3>{area}</h3><p>{index === 0 ? 'Main Gate · Canteen · Library · Hostel Gate' : area.startsWith('Other') ? 'Approval required · fee set by admin' : 'Active delivery area · ₹50 or free above ₹1,000'}</p></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Admin-editable slots</p><h2>Delivery slots</h2></div><Button variant="secondary" icon={<Plus size={15} />}>Add slot</Button></div>{deliverySlots.map((slot) => <div className="ops-order-row" key={slot.id}><div><strong>{slot.label}</strong><span>{slot.area} · {slot.days}</span></div><Badge tone="icy">{slot.remaining} spots left</Badge><button className="small-link">Edit <Edit3 size={13} /></button></div>)}</GlassCard></div>;
-  if (tab === 'Store Controls') return <div className="ops-section"><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>Store controls are live in the prototype</strong><span>These settings map to SiteSettings and will drive checkout, requests and capacity in the API.</span></div><Badge tone="icy">Asia/Kolkata</Badge></div><div className="ops-card-grid settings-grid"><GlassCard><p className="eyebrow">Store status</p><h2>Open for orders</h2><div className="segmented-control"><button className="is-selected">OPEN</button><button>PAUSED</button><button>MAINTENANCE</button></div><label className="toggle-row"><span><strong>Accepting custom requests</strong><small>Separate from the store toggle</small></span><span className="toggle is-on"><span /></span></label><label className="floating-field"><input defaultValue={storeSettings.pauseMessage} placeholder=" " /><span>Pause message</span></label></GlassCard><GlassCard><p className="eyebrow">Capacity & cutoffs</p><h2>Protect the studio rhythm.</h2><div className="capacity-list"><span>Daily orders <strong>{storeSettings.dailyOrderCapacity}</strong></span><span>Daily custom requests <strong>{storeSettings.dailyCustomCapacity}</strong></span><span>Active production cap <strong>{storeSettings.maxActiveProductionOrders}</strong></span><span>Order cutoff <strong>{storeSettings.orderCutoffTime} IST</strong></span></div><div className="store-controls-foot"><CalendarDays size={15} /> Holidays and blackout dates are managed here.</div></GlassCard></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Customer-facing</p><h2>Announcement bar</h2></div><Badge tone="blush">ACTIVE</Badge></div><div className="announcement-preview">{storeSettings.announcementBar.text}<ArrowUpRight size={15} /></div></GlassCard></div>;
-  if (tab === 'Pages') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><FileText size={15} /> CMS-lite · policy pages need review before publishing</span><Button variant="secondary" icon={<Plus size={15} />}>New page</Button></div><GlassCard className="ops-table-card">{cmsPages.map((page) => <div className="ops-order-row" key={page.slug}><div><strong>{page.title}</strong><span>/pages/{page.slug} · {page.meta}</span></div><Badge tone={page.status === 'Published' ? 'icy' : 'soft'}>{page.status}</Badge><span className="review-note">{page.note}</span><button className="small-link">Edit <Edit3 size={13} /></button></div>)}<div className="faq-strip"><strong>{faqs.length} FAQs</strong><span>Editable content for launch-ready payment gateway pages.</span><button className="small-link">Manage FAQs <ArrowUpRight size={13} /></button></div></GlassCard></div>;
-  if (tab === 'Team') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><LockKeyhole size={15} /> Permissions are enforced on every admin route</span><Button variant="secondary" icon={<UserPlus size={15} />}>Add team member</Button></div><div className="team-grid">{adminTeam.map((member) => <GlassCard className="team-card" key={member.name}><div className="team-avatar">{member.name[0]}</div><div><strong>{member.name}</strong><Badge tone={member.role === 'owner' ? 'signature' : member.role === 'manager' ? 'blush' : 'soft'}>{member.role}</Badge><p>{member.detail}</p></div><button className="icon-button"><Edit3 size={14} /></button></GlassCard>)}</div><GlassCard className="security-note"><ShieldCheck size={19} /><div><strong>Security guardrails</strong><span>Five failed logins lock an account for 15 minutes. Strong passwords, logout-all-devices and a clean TOTP hook are ready for the backend.</span></div></GlassCard></div>;
-  if (tab === 'Audit Log') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><ClipboardList size={15} /> Immutable record of money, status, location and role changes</span><button><Download size={14} /> Export log</button></div><GlassCard className="ops-table-card">{auditLogs.map((log) => <div className="ops-order-row" key={`${log.entity}-${log.action}`}><div><strong>{log.action}</strong><span>{log.entity} · by {log.actor}</span></div><span>{log.at}</span><Badge tone="icy">Recorded</Badge><button className="small-link">View diff <ArrowUpRight size={13} /></button></div>)}</GlassCard></div>;
-  if (tab === 'Reports') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><BarChart3 size={15} /> Revenue, conversion and repeat-customer signals</span><button><Download size={14} /> Export CSV</button></div><div className="report-grid"><GlassCard><span>Revenue this month</span><strong>₹28,400</strong><small>↑ 12% vs last month</small></GlassCard><GlassCard><span>Custom → order conversion</span><strong>38%</strong><small>from 42 requests</small></GlassCard><GlassCard><span>Average order value</span><strong>₹1,420</strong><small>across 20 paid orders</small></GlassCard><GlassCard><span>Repeat customers</span><strong>31%</strong><small>students coming back</small></GlassCard></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Exports</p><h2>Open in Excel</h2></div></div><div className="export-actions"><button><Download size={15} /> Orders CSV</button><button><Download size={15} /> Customers CSV</button><button><Download size={15} /> Payments CSV</button><button><Download size={15} /> Products CSV</button></div></GlassCard></div>;
-  if (tab === 'Notifications') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><Bell size={15} /> Branded email now, WhatsApp hook later</span><Button variant="secondary" icon={<Edit3 size={15} />}>Message templates</Button></div><GlassCard className="ops-table-card">{notificationLogs.map((log) => <div className="ops-order-row" key={`${log.type}-${log.recipient}`}><div><strong>{log.type}</strong><span>{log.channel} · {log.recipient} · {log.attempts} attempt(s)</span></div><Badge tone={log.status === 'Delivered' ? 'icy' : 'soft'}>{log.status}</Badge><button className="small-link">Open log <ArrowUpRight size={13} /></button></div>)}</GlassCard></div>;
-  if (tab === 'Payment Issues') return <div className="ops-section"><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>Manual payment verification</strong><span>Customer payment reports stay pending until the studio records the amount received.</span></div><Badge tone="icy">UPI</Badge></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Daily reconciliation</p><h2>1 issue needs a re-sync</h2></div><Button variant="secondary" icon={<RefreshCw size={15} />}>Run reconciliation</Button></div><div className="payment-issue-row"><div><strong>EFU-1037 · paid but not confirmed</strong><span>Review the customer's reported payment and update the verified amount</span></div><Badge tone="blush">Mismatch</Badge><button className="small-link">Review payment <RefreshCw size={13} /></button></div></GlassCard></div>;
-  return <div className="ops-section"><GlassCard className="empty-state"><div className="empty-icon"><SlidersHorizontal size={25} /></div><h3>{tab} is ready for the next backend milestone.</h3><p>The prototype keeps this panel modular so the MERN resource can plug in without moving catalogue, pricing or permission logic into page components.</p><Button variant="secondary">Configure</Button></GlassCard></div>;
+  if (tab === 'Reviews') return <AdminReviewsPanel />;
+  return <div className="ops-section"><EmptyState title={`No ${tab.toLowerCase()} records yet`} body="This section will show information after it has been added to your studio database." /></div>;
 }
 
-function AdminLoginPage({ onLoginSuccess }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+function AdminDashboard({ token, onOpenOrders }) {
+  const [summary, setSummary] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Login failed. Please check your credentials.');
-      }
-      localStorage.setItem('efu_admin_token', data.token);
-      localStorage.setItem('efu_admin_user', JSON.stringify(data.admin));
-      onLoginSuccess(data.token, data.admin);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <GradientBackground variant="admin">
-      <Navbar cartCount={useApp().cart.length} />
-      <main className="container" style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '120px 20px 60px' }}>
-        <GlassCard style={{ maxWidth: '440px', width: '100%', padding: '36px 30px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'var(--ink)', color: '#fff', display: 'grid', placeItems: 'center', margin: '0 auto 14px', fontSize: '18px', fontWeight: 600, fontFamily: 'Fraunces, serif' }}>
-              EFU
-            </div>
-            <p className="eyebrow" style={{ marginBottom: '4px' }}>Studio Desk</p>
-            <h1 style={{ fontSize: '28px', margin: '0 0 6px', fontFamily: 'Fraunces, serif' }}>Admin Sign In</h1>
-            <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 0 }}>Restricted portal for studio owners and team members.</p>
-          </div>
-
-          {error && (
-            <div style={{ background: 'rgba(197, 90, 131, 0.12)', border: '1px solid rgba(197, 90, 131, 0.3)', borderRadius: '10px', padding: '10px 14px', marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px', color: '#c55a83', fontSize: '12px' }}>
-              <AlertCircle size={16} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px' }}>
-            <label className="floating-field">
-              <input
-                required
-                type="email"
-                placeholder=" "
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-              />
-              <span>Admin Email address</span>
-            </label>
-
-            <label className="floating-field">
-              <input
-                required
-                type="password"
-                placeholder=" "
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-              <span>Password</span>
-            </label>
-
-            <Button type="submit" disabled={loading} style={{ width: '100%', marginTop: '6px' }}>
-              {loading ? 'Verifying credentials...' : 'Enter Studio Desk'}
-            </Button>
-          </form>
-
-          <div style={{ marginTop: '22px', textAlign: 'center', fontSize: '11px', color: 'var(--muted)' }}>
-            <LockKeyhole size={12} style={{ display: 'inline', verticalAlign: '-1px', marginRight: '4px' }} />
-            Protected by JWT & secure session tokens
-          </div>
-        </GlassCard>
-      </main>
-    </GradientBackground>
-  );
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/admin/summary', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : Promise.reject(new Error('Could not load studio summary.'))),
+      fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.ok ? r.json() : Promise.reject(new Error('Could not load orders.'))),
+    ]).then(([s, o]) => { setSummary(s.summary || {}); setOrders(o.orders || []); })
+      .catch((err) => setError(err.message || 'Could not load studio data.'));
+  }, [token]);
+  const stats = summary ? [
+    ['Orders today', summary.ordersToday || 0],
+    ['Pending quotes', summary.pendingQuotes || 0],
+    ['In production', summary.inProduction || 0],
+    ['Recorded revenue', formatINR(summary.totalRevenue || 0)],
+  ] : [];
+  return <div className="ops-section">
+    {error && <div role="alert" style={{ color: '#c55a83', marginBottom: 12 }}>{error}</div>}
+    {!summary ? <GlassCard className="empty-state"><p>Loading studio records…</p></GlassCard> : <>
+      <div className="admin-stat-grid">{stats.map(([label, value]) => <GlassCard key={label}><span className="stat-label">{label}</span><strong>{value}</strong></GlassCard>)}</div>
+      <GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Latest activity</p><h2>Recent orders</h2></div><button className="small-link" onClick={onOpenOrders}>View all <ArrowUpRight size={14} /></button></div>
+        {orders.length ? orders.slice(0, 5).map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.id}</strong><span>{typeof order.customer === 'string' ? order.customer : order.customer?.name || order.customer_name || order.email || 'Customer'}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge><span>{formatINR(order.total ?? order.pricing?.total ?? 0)}</span><span>{order.paymentStatus || order.payment_status || 'PENDING'}</span></div>) : <EmptyState title="No orders yet" body="Real customer orders will appear here." />}
+      </GlassCard>
+    </>}
+  </div>;
 }
 
 function AdminPage() {
@@ -1773,11 +1938,11 @@ function AdminPage() {
 
   if (checkingSession) return <GradientBackground variant="admin"><main className="container success-page"><p>Checking your studio session…</p></main></GradientBackground>;
   if (!token) {
-    return <AdminLoginPage onLoginSuccess={(tok, user) => { setAdminUser(user); setCheckingSession(true); setToken(tok); }} />;
+    return <Navigate to="/login" replace state={{ from: { pathname: '/admin' } }} />;
   }
 
   const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Messages', MessageCircle], ['Custom Requests', WandSparkles], ['Products', Palette], ['Categories', Tag], ['Payment Setup', CreditCard], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ...(String(adminUser?.role).toUpperCase() === 'OWNER' ? [['Team', UserPlus]] : []), ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
-  return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>Manual payments · Studio confirmed</strong><span>Record advance and balance payments only after you verify they arrived.</span></div><Badge tone="icy">OPEN</Badge></div><div className="admin-stat-grid"><GlassCard><span className="stat-label">Orders today</span><strong>12</strong><small className="stat-up">↑ 18% this week</small></GlassCard><GlassCard><span className="stat-label">Pending quotes</span><strong>08</strong><small>3 need your reply</small></GlassCard><GlassCard><span className="stat-label">In production</span><strong>14</strong><small>Across 7 categories</small></GlassCard><GlassCard><span className="stat-label">Revenue</span><strong>₹28.4k</strong><small className="stat-up">↑ 12% this month</small></GlassCard></div><div className="admin-main-grid"><GlassCard className="revenue-card"><div className="admin-card-heading"><div><p className="eyebrow">A gentle upward trend</p><h2>Revenue overview</h2></div><select><option>Last 30 days</option><option>Last 7 days</option></select></div><div className="chart"><div className="chart-grid"><span /><span /><span /><span /></div><svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Revenue sparkline"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#FFAFCC" stopOpacity=".42" /><stop offset="100%" stopColor="#FFAFCC" stopOpacity="0" /></linearGradient></defs><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23 L600,180 L0,180 Z" fill="url(#chartFill)" /><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23" fill="none" stroke="#C55A83" strokeWidth="3" strokeLinecap="round" /></svg><div className="chart-labels"><span>01 Sep</span><span>15 Sep</span><span>30 Sep</span></div></div></GlassCard><GlassCard className="requests-card"><div className="admin-card-heading"><div><p className="eyebrow">Needs attention</p><h2>Keep things moving</h2></div><button className="small-link" onClick={() => setTab('Orders')}>View all <ArrowUpRight size={14} /></button></div>{adminNeedsAttention.map((item) => <div className="admin-request" key={item.label}><div className="attention-icon"><AlertCircle size={15} /></div><div><strong>{item.label}</strong><span>{item.detail}</span></div><Badge tone={item.tone}>Open</Badge></div>)}</GlassCard></div><GlassCard className="orders-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Keep things moving</p><h2>Recent orders</h2></div><button className="small-link" onClick={() => setTab('Orders')}>Manage orders <ArrowUpRight size={14} /></button></div><div className="orders-table"><div className="orders-table-row orders-table-head"><span>Order</span><span>Customer</span><span>Piece</span><span>Status</span><span>Total</span></div>{sampleOrders.map((order) => <div className="orders-table-row" key={order.id}><span><strong>{order.id}</strong><small>{order.date}</small></span><span>{order.customer}</span><span>{order.item}</span><span><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge></span><span><strong>{formatINR(order.total)}</strong></span></div>)}</div></GlassCard></> : <AdminOpsPanel tab={tab} setTab={setTab} />}</section></main></GradientBackground>;
+  return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <AdminDashboard token={token} onOpenOrders={() => setTab('Orders')} /> : <AdminOpsPanel tab={tab} setTab={setTab} />}</section></main></GradientBackground>;
 }
 
 const LiveDataContext = createContext(null);
@@ -1801,7 +1966,7 @@ function OccasionRoute() {
 
 function App() {
   const [cart, setCart] = useState([]);
-  const [wishlist, setWishlist] = useState(['p3', 'p11']);
+  const [wishlist, setWishlist] = useState([]);
   const [toast, setToast] = useState(null);
   const reduced = useReducedMotion();
 
@@ -1830,7 +1995,7 @@ function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  window.__efuApp = { cart, wishlist, addToCart, onWish, updateQuantity, removeFromCart, reduced };
+  window.__efuApp = { cart, wishlist, addToCart, onWish, updateQuantity, removeFromCart, emptyCart: () => setCart([]), reduced };
 
   return (
     <AuthProvider>
@@ -1847,19 +2012,20 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Protected Storefront Routes */}
-            <Route path="/shop" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
-            <Route path="/category/:slug" element={<ProtectedRoute><CategoryRoute /></ProtectedRoute>} />
-            <Route path="/occasion/:occasion" element={<ProtectedRoute><OccasionRoute /></ProtectedRoute>} />
-            <Route path="/product/:slug" element={<ProtectedRoute><ProductPage /></ProtectedRoute>} />
+            <Route path="/shop" element={<ProtectedRoute allowAdmin><ShopPage /></ProtectedRoute>} />
+            <Route path="/category/:slug" element={<ProtectedRoute allowAdmin><CategoryRoute /></ProtectedRoute>} />
+            <Route path="/occasion/:occasion" element={<ProtectedRoute allowAdmin><OccasionRoute /></ProtectedRoute>} />
+            <Route path="/product/:slug" element={<ProtectedRoute allowAdmin><ProductPage /></ProtectedRoute>} />
             <Route path="/custom-request" element={<ProtectedRoute><CustomRequestPage /></ProtectedRoute>} />
-            <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
+            <Route path="/cart" element={<ProtectedRoute allowAdmin><CartPage /></ProtectedRoute>} />
             <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
-            <Route path="/track-order" element={<ProtectedRoute><TrackOrderPage /></ProtectedRoute>} />
-            <Route path="/about" element={<ProtectedRoute><AboutPage /></ProtectedRoute>} />
-            <Route path="/pages/:slug" element={<ProtectedRoute><ContentPage /></ProtectedRoute>} />
+            <Route path="/track-order" element={<Navigate to="/account" replace />} />
+            <Route path="/about" element={<ProtectedRoute allowAdmin><AboutPage /></ProtectedRoute>} />
+            <Route path="/pages/:slug" element={<ProtectedRoute allowAdmin><ContentPage /></ProtectedRoute>} />
 
             {/* Customer Account Routes (Protected) */}
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+            <Route path="/account/orders/:id/chat" element={<ProtectedRoute><OrderChatPage /></ProtectedRoute>} />
             <Route path="/account/requests/:id" element={<ProtectedRoute><RequestConversationPage /></ProtectedRoute>} />
 
             {/* Admin Desk Route (Protected) */}

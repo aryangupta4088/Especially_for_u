@@ -1,0 +1,5368 @@
+{
+  "metadata": {
+    "project_name": "especially-for-u",
+    "generated_at": "2026-10-09T04:13:17.413Z",
+    "root": ".",
+    "languages": [
+      "CSS",
+      "JavaScript",
+      "JavaScript (JSX)",
+      "SQL",
+      "TypeScript"
+    ],
+    "frameworks": [
+      "React",
+      "Vite",
+      "Express",
+      "Tailwind CSS"
+    ],
+    "package_managers": [
+      "npm"
+    ],
+    "entry_points": [
+      "src/main.jsx",
+      "server/index.js"
+    ],
+    "confidence": 0.84
+  },
+  "commands": {
+    "install": "npm install",
+    "dev": "npm run dev (Vite port 3000); separately: npm run server (API port 4000 by default)",
+    "build": "npm run build",
+    "test": "unknown (no test script or test files detected)",
+    "lint": "unknown (no lint script configured)",
+    "format": "unknown (no format script configured)",
+    "typecheck": "unknown (no typecheck script configured)",
+    "migrate": "npm run db:migrate",
+    "seed": "npm run db:seed",
+    "deploy": "Dockerfile: docker build -t especially-for-u .; run image with PORT exposed (no platform deploy command configured)"
+  },
+  "architecture": {
+    "layers": [
+      "React/Vite client: UI routes, auth context, ephemeral cart/wishlist, and mock/live API seam.",
+      "Express API: validation, endpoint orchestration, JWT middleware, integrations, and static dist serving.",
+      "Domain modules: catalogue projection, Zod validation/pricing, auth, Razorpay, and notifications.",
+      "Persistence: MySQL and deterministic in-memory fallback; additive SQL migrations and seeding."
+    ],
+    "main_modules": {
+      "src/App.jsx": "Client routes, storefront/admin pages, shared UI, cart/wishlist state, and live data access.",
+      "src/mockData.js": "Prototype content and deterministic seed inputs.",
+      "src/context/AuthContext.jsx": "User auth state/actions persisted to localStorage.",
+      "server/index.js": "REST declarations, middleware, order/payment/auth coordination, uploads, and SPA fallback.",
+      "server/repository.js": "Memory/MySQL repository implementations and DB failure fallback.",
+      "server/pricing.js": "Zod schemas and server-derived order/payment amounts.",
+      "server/auth.js": "User/admin identity, JWTs, guards, and reset flow.",
+      "server/migrations/": "MySQL schema evolution."
+    },
+    "request_flow": "Browser loads src/main.jsx -> App routes. Vite proxies /api to Express:4000 in development. Express validates/authenticates requests, invokes domain modules and repository, then returns JSON. Production Express serves dist/index.html for non-API routes.",
+    "data_flow": "src/mockData.js supplies prototype content and server/catalog.js seed projections. Live requests use API helpers. Orders/custom requests are validated; pricing uses server catalogue/settings before persistence.",
+    "state_management": "React state owns cart/wishlist and is ephemeral. AuthContext persists user token/data in localStorage. App-level context shares live data.",
+    "authentication_authorization": "User/admin JWTs are issued and checked in server/auth.js; protected endpoints use requireUserJWT/requireAdminJWT and the client has ProtectedRoute. A development fallback JWT secret exists; Google auth handler accepts client identity fields, so do not treat it as verified without trusted token verification.",
+    "database_storage": "DATABASE_URL or DB_HOST enables MySQL; otherwise memory mode. Configured MySQL has per-operation in-memory fallback on DB errors; fallback writes are not durable. Run migrations and seed for managed persistence.",
+    "external_services": "Optional Razorpay; missing config results in mock payment behavior. Notifications are config-gated and can use Gmail/owner path. No verified Google token exchange was identified.",
+    "background_jobs": "No scheduler, queue, or background worker detected. Notifications are triggered during request handling.",
+    "build_deploy_flow": "npm run build creates dist. Docker uses Node 22 Alpine, npm ci --omit=dev, builds, then runs npm start. Production API listens on PORT or 3000.",
+    "api_routes": [
+      "GET /api/health",
+      "GET /api/products",
+      "GET /api/categories",
+      "GET /api/settings/public",
+      "GET /api/delivery/areas",
+      "POST /api/orders",
+      "POST /api/payments/verify",
+      "POST /api/payments/webhook",
+      "GET /api/orders",
+      "GET /api/orders/:id",
+      "POST /api/orders/:id/queries",
+      "GET /api/orders/:id/queries",
+      "POST /api/custom-requests",
+      "POST /api/auth/register",
+      "POST /api/auth/admin-register",
+      "POST /api/auth/login",
+      "POST /api/auth/google",
+      "GET /api/auth/config",
+      "POST /api/auth/forgot-password",
+      "POST /api/auth/reset-password",
+      "GET /api/auth/me",
+      "POST /api/admin/login",
+      "GET /api/admin/me",
+      "GET /api/admin/summary",
+      "GET /api/admin/orders",
+      "GET /api/admin/orders/:id",
+      "PATCH /api/admin/orders/:id/status",
+      "PATCH /api/admin/orders/:id/location",
+      "PATCH /api/admin/orders/:id/estimated-date",
+      "GET /api/admin/order-queries",
+      "PATCH /api/admin/order-queries/:id/reply",
+      "GET /api/admin/custom-requests",
+      "GET /api/admin/custom-requests/:id",
+      "PATCH /api/admin/custom-requests/:id/status",
+      "PATCH /api/admin/settings",
+      "GET /api/admin/products",
+      "GET /api/admin/products/:id",
+      "POST /api/admin/products",
+      "PATCH /api/admin/products/:id",
+      "DELETE /api/admin/products/:id",
+      "GET /api/admin/categories",
+      "POST /api/admin/categories",
+      "PATCH /api/admin/categories/:id",
+      "DELETE /api/admin/categories/:id",
+      "POST /api/admin/upload",
+      "GET /api/admin/audit-logs",
+      "GET /api/admin/notification-logs"
+    ],
+    "client_routes": [
+      "/",
+      "/login",
+      "/signup",
+      "/forgot-password",
+      "/reset-password",
+      "/shop",
+      "/category/:slug",
+      "/occasion/:occasion",
+      "/product/:slug",
+      "/custom-request",
+      "/cart",
+      "/checkout",
+      "/track-order",
+      "/about",
+      "/pages/:slug",
+      "/account",
+      "/account/requests/:id",
+      "/admin",
+      "*"
+    ],
+    "tables": [
+      "site_settings",
+      "products",
+      "delivery_areas",
+      "delivery_slots",
+      "orders",
+      "order_items",
+      "custom_requests",
+      "notification_logs",
+      "audit_logs",
+      "users",
+      "password_reset_tokens",
+      "categories",
+      "order_queries"
+    ]
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "language": "Git ignore",
+      "lines_of_code": 7,
+      "sha256": "89adb2ce43c302df46a058eee3a1151c65f941283149d85e5309e01dbe4c3e1e",
+      "summary": "Excludes dependencies, generated output, environment files, and optional database CA material.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": ".trae/documents/auth_system_plan.md",
+      "language": "Markdown",
+      "lines_of_code": 142,
+      "sha256": "93ff8fabc7b47bf7f1a09d075283255e0e990f53651cde3d14fc10374b17cc8e",
+      "summary": "Planning notes for intended authentication behavior; compare with runtime auth implementation.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "app.config.ts",
+      "language": "TypeScript",
+      "lines_of_code": 3,
+      "sha256": "5b19e3fc0e21b3cfa07470a65f05dacd42ece1971e66bf2e8c805f5a405c409d",
+      "summary": "Exports application logo metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "Dockerfile",
+      "language": "Dockerfile",
+      "lines_of_code": 10,
+      "sha256": "bdb43f6a441347efc988228d557810a45776b081c35055bef20e32bd1e4d6ddf",
+      "summary": "Builds the Vite frontend in Node 22 Alpine and starts production Express.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "index.html",
+      "language": "HTML",
+      "lines_of_code": 14,
+      "sha256": "e315bec31c9b7565568136e7b634dd190455776a5be430327ceb3a12289bcf12",
+      "summary": "Vite HTML shell containing root mount and page metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "path": "package.json",
+      "language": "JSON",
+      "lines_of_code": 39,
+      "sha256": "f68377ad1192faa1c1f4afae2640a5c8037b36a6d1071fe8958add7980323dc3",
+      "summary": "Defines the ESM npm project, scripts, dependency declarations, and build/run commands.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "plan.md",
+      "language": "Markdown",
+      "lines_of_code": 47,
+      "sha256": "4a046380a104abcba3e0979501f6455af2d38aded956ad364b356d8567230627",
+      "summary": "Documents initial storefront design direction, architecture intent, and future API seam.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "postcss.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 1,
+      "sha256": "0a2fc2215a078c6b39f3dfc9cb62c7c453fbd417528622b58f010b8511ea3713",
+      "summary": "Enables Autoprefixer through PostCSS.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "public/manus-routes.json",
+      "language": "JSON",
+      "lines_of_code": 18,
+      "sha256": "45ae22a6b0a703fa99245b3830a0cb75177a35256c4171b03acdac655c1d09f8",
+      "summary": "Lists storefront, account, and admin route metadata.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "path": "README.md",
+      "language": "Markdown",
+      "lines_of_code": 34,
+      "sha256": "7d1a8b80df26dd918883e17378f36be5e3dc6c9e641ed8fd14c292a31b0a020f",
+      "summary": "Describes the storefront, prototype routes, mock-data seam, backend, and local run/deploy model.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/auth.js",
+      "language": "JavaScript",
+      "lines_of_code": 274,
+      "sha256": "e693d0352790decce808754857ac27dc014297f850466ceded6d3e75eff68ea7",
+      "summary": "Implements password/JWT auth, admin/user middleware, Google identity, reset tokens, and config.",
+      "exports": [
+        "authenticateAdmin",
+        "requireAdminJWT",
+        "registerUser",
+        "registerAdmin",
+        "authenticateUser",
+        "authenticateGoogle",
+        "requireUserJWT",
+        "optionalUserJWT",
+        "generatePasswordResetToken",
+        "resetPasswordWithToken",
+        "authConfig"
+      ],
+      "imports": [
+        "bcryptjs",
+        "jsonwebtoken",
+        "nodemailer",
+        "node:crypto"
+      ],
+      "key_symbols": [
+        "getAdminAccounts",
+        "admins",
+        "authenticateAdmin",
+        "requireAdminJWT",
+        "signUserToken",
+        "sanitizeUser",
+        "registerUser",
+        "registerAdmin",
+        "authenticateUser",
+        "authenticateGoogle",
+        "requireUserJWT",
+        "optionalUserJWT",
+        "buildTransport",
+        "generatePasswordResetToken",
+        "resetPasswordWithToken",
+        "authConfig"
+      ],
+      "tags": [
+        "backend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/catalog.js",
+      "language": "JavaScript",
+      "lines_of_code": 35,
+      "sha256": "000ff581e0bcf3f6826f2d40168726b79d5414ac13b9cb252012f43236d32a86",
+      "summary": "Adapts frontend mock catalogue/settings into backend exports and public products.",
+      "exports": [
+        "catalogProducts",
+        "catalogCategories",
+        "catalogDeliveryAreas",
+        "catalogDeliverySlots",
+        "catalogStoreSettings",
+        "publicProduct"
+      ],
+      "imports": [
+        "../src/mockData.js"
+      ],
+      "key_symbols": [
+        "publicProduct",
+        "catalogProducts",
+        "catalogCategories",
+        "catalogDeliveryAreas",
+        "catalogDeliverySlots",
+        "catalogStoreSettings"
+      ],
+      "tags": [
+        "backend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/db.js",
+      "language": "JavaScript",
+      "lines_of_code": 62,
+      "sha256": "42b1f40682e9383becefa5a2374a4b5ce5e1e38ff6d985860bc61304bb52914a",
+      "summary": "Creates/closes managed MySQL pool and reports database mode/SSL setup.",
+      "exports": [
+        "getDatabaseMode",
+        "getPool",
+        "closePool"
+      ],
+      "imports": [
+        "mysql2/promise",
+        "node:fs",
+        "node:path",
+        "node:url"
+      ],
+      "key_symbols": [
+        "getDatabaseMode",
+        "buildSslOptions",
+        "getPool",
+        "closePool"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/index.js",
+      "language": "JavaScript",
+      "lines_of_code": 633,
+      "sha256": "c34f5a4f7990401bc95df5e9c0961e4eed1d8f7fac4455c3ee4d5547626c02c3",
+      "summary": "Creates Express API, middleware, REST routes, and production SPA fallback.",
+      "exports": [],
+      "imports": [
+        "node:path",
+        "node:fs/promises",
+        "node:url",
+        "node:crypto",
+        "express",
+        "cors",
+        "helmet",
+        "zod",
+        "./catalog.js",
+        "./repository.js",
+        "./pricing.js",
+        "./notifications.js",
+        "./auth.js",
+        "./payments.js"
+      ],
+      "key_symbols": [
+        "saveBase64Image"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrate.js",
+      "language": "JavaScript",
+      "lines_of_code": 57,
+      "sha256": "2b810dc9d8b7fe6efcffc5826e36bbc2435d149f4ebf2ec23227b66ad66f82bf",
+      "summary": "Applies ordered SQL migration statements to configured MySQL.",
+      "exports": [],
+      "imports": [
+        "node:fs",
+        "node:fs/promises",
+        "node:path",
+        "node:url",
+        "mysql2/promise"
+      ],
+      "key_symbols": [
+        "buildSslOptions"
+      ],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/001_initial.sql",
+      "language": "SQL",
+      "lines_of_code": 142,
+      "sha256": "d6ad4aad828739dd07bc7c11b2292f8eb16d30ff8e586596b62e58108698c5af",
+      "summary": "Creates settings, product, delivery, order, request, notification, and audit tables.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "site_settings",
+        "products",
+        "delivery_areas",
+        "delivery_slots",
+        "orders",
+        "order_items",
+        "custom_requests",
+        "notification_logs",
+        "audit_logs"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/002_users_categories_resets.sql",
+      "language": "SQL",
+      "lines_of_code": 39,
+      "sha256": "9eb22b3a75ced0a06fbddb335f143458e18fe2a28d8cdaa8e1b4a8639a734142",
+      "summary": "Adds users, password reset tokens, and category tables.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "users",
+        "password_reset_tokens",
+        "categories"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/003_product_columns.sql",
+      "language": "SQL",
+      "lines_of_code": 32,
+      "sha256": "be4773f883cf2eb428452e8dc88d640ae19d0c7f7412b932b73049338613004c",
+      "summary": "Adds product schema fields introduced after initial schema.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/004_admin_role_order_queries.sql",
+      "language": "SQL",
+      "lines_of_code": 50,
+      "sha256": "005a275865bdb50f77e0ef0be504fb8736c23a9cc5033df218161bc7b7ba618a",
+      "summary": "Adds order-query storage and order/user query support fields/indexes.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [
+        "order_queries"
+      ],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/migrations/005_estimated_pickup.sql",
+      "language": "SQL",
+      "lines_of_code": 40,
+      "sha256": "73bcf5200365c7bf6139d2109642b9ad563462dc38f7f5fee151b3f03948fce8",
+      "summary": "Adds estimated production and pickup date fields.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/notifications.js",
+      "language": "JavaScript",
+      "lines_of_code": 216,
+      "sha256": "2c26a01e15d7b92ee1cd28af1b26cbc2b7946d350007a43aba9929c2d7faacf2",
+      "summary": "Formats and sends configured owner/customer notifications.",
+      "exports": [
+        "notificationConfig",
+        "notifyNewOrder",
+        "notifyNewCustomRequest",
+        "sendOrderConfirmation"
+      ],
+      "imports": [
+        "nodemailer"
+      ],
+      "key_symbols": [
+        "getTransporter",
+        "notificationConfig",
+        "formatOrderHTML",
+        "formatCustomRequestHTML",
+        "sendGmail",
+        "notifyNewOrder",
+        "notifyNewCustomRequest",
+        "sendOrderConfirmation"
+      ],
+      "tags": [
+        "backend",
+        "notifications"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/payments.js",
+      "language": "JavaScript",
+      "lines_of_code": 79,
+      "sha256": "6ead2e3c18bc8cfbb082476687bee1f2e03c33e56e7bc5c66b9527fed0ab751c",
+      "summary": "Wraps optional Razorpay order creation and payment/webhook verification.",
+      "exports": [
+        "paymentConfig",
+        "createRazorpayOrder",
+        "verifyPaymentSignature",
+        "verifyWebhookSignature",
+        "fetchPayment"
+      ],
+      "imports": [
+        "razorpay",
+        "node:crypto"
+      ],
+      "key_symbols": [
+        "getRazorpay",
+        "paymentConfig",
+        "createRazorpayOrder",
+        "verifyPaymentSignature",
+        "verifyWebhookSignature",
+        "fetchPayment"
+      ],
+      "tags": [
+        "backend",
+        "payments"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/pricing.js",
+      "language": "JavaScript",
+      "lines_of_code": 88,
+      "sha256": "4020cdc1281661398c11e0fc585277b7e84236116eda356fc83a829d6f80fe6f",
+      "summary": "Defines Zod order/request schemas and authoritative server-side totals/payment policy.",
+      "exports": [
+        "orderInputSchema",
+        "customRequestSchema",
+        "calculateOrder"
+      ],
+      "imports": [
+        "zod"
+      ],
+      "key_symbols": [
+        "calculateOrder",
+        "orderInputSchema",
+        "customRequestSchema"
+      ],
+      "tags": [
+        "backend",
+        "validation",
+        "pricing"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/README.md",
+      "language": "Markdown",
+      "lines_of_code": 29,
+      "sha256": "b0cd5fcd4eb6cff46182e00e2bbac57abb7d4aa47b4ec3ecc90e8ee02f091ad6",
+      "summary": "Documents API startup, database commands, endpoint groups, and notification constraints.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "backend",
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/repository.js",
+      "language": "JavaScript",
+      "lines_of_code": 648,
+      "sha256": "82a28b3be5ac4b6a64ec7b25e86c9dc40647c24881f2913d50f5e2e2db482c66",
+      "summary": "Provides memory/MySQL data access for catalogue, orders, users, settings, logs, and queries.",
+      "exports": [
+        "createRepository",
+        "newEntityId"
+      ],
+      "imports": [
+        "bcryptjs",
+        "node:crypto",
+        "./catalog.js",
+        "./db.js"
+      ],
+      "key_symbols": [
+        "clone",
+        "parseJson",
+        "memoryRepository",
+        "mysqlRepository",
+        "createRepository",
+        "newEntityId"
+      ],
+      "tags": [
+        "backend",
+        "persistence"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "server/seed.js",
+      "language": "JavaScript",
+      "lines_of_code": 18,
+      "sha256": "78a2436745d5dcd21512e237653b4210da00bda3b8a78ee7f64fa0c19717f693",
+      "summary": "Seeds MySQL settings, catalogue, delivery areas, and slots from shared catalogue.",
+      "exports": [],
+      "imports": [
+        "./catalog.js",
+        "./db.js"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/App.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 1506,
+      "sha256": "3f2006c53e38106ddefda44d3a06103664a0240b7a23a7833be2500e962b95e3",
+      "summary": "Implements client routes, storefront/admin pages, shared UI, cart/wishlist, and live data integration.",
+      "exports": [],
+      "imports": [
+        "framer-motion",
+        "lucide-react",
+        "react-router-dom",
+        "react",
+        "./mockData",
+        "./context/AuthContext.jsx",
+        "./components/ProtectedRoute.jsx",
+        "./pages/AuthPage.jsx",
+        "./pages/ResetPasswordPage.jsx",
+        "react-router-dom"
+      ],
+      "key_symbols": [
+        "useLiveData",
+        "Button",
+        "Badge",
+        "GlassCard",
+        "SectionHeading",
+        "PriceTag",
+        "GradientBackground",
+        "AnnouncementBar",
+        "Navbar",
+        "Footer",
+        "WhatsAppFloat",
+        "ProductCard",
+        "CategoryCard",
+        "Marquee",
+        "Timeline",
+        "HomePage",
+        "ShopPage",
+        "EmptyState",
+        "ProductPage",
+        "CustomRequestPage",
+        "CartPage",
+        "CheckoutPage",
+        "CheckoutContact",
+        "CheckoutDelivery",
+        "CheckoutPayment",
+        "CheckoutReview",
+        "AccountPage",
+        "TrackOrderPage",
+        "AboutPage",
+        "ContentPage",
+        "fileToBase64",
+        "AdminProductsPanel",
+        "AdminCategoriesPanel",
+        "AdminOrdersPanel",
+        "AdminOrderQueriesPanel",
+        "AdminOpsPanel",
+        "AdminLoginPage",
+        "AdminPage",
+        "LiveDataProvider",
+        "useLive",
+        "CategoryRoute",
+        "OccasionRoute",
+        "App"
+      ],
+      "tags": [
+        "frontend",
+        "routing",
+        "storefront",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/components/ProtectedRoute.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 27,
+      "sha256": "a868f5aaf420ce9b332881a20ab5105fce31e034e5806aa0394a3b998d338392",
+      "summary": "Guards client routes by authenticated and optional admin state.",
+      "exports": [
+        "ProtectedRoute"
+      ],
+      "imports": [
+        "react-router-dom",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "ProtectedRoute"
+      ],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/context/AuthContext.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 129,
+      "sha256": "e0210b025df009998b64e994b6f37fad1bbdbc59211191f17598df18376c4eb5",
+      "summary": "Provides auth state, localStorage persistence, API actions, and useAuth.",
+      "exports": [
+        "AuthProvider",
+        "useAuth"
+      ],
+      "imports": [
+        "react"
+      ],
+      "key_symbols": [
+        "readStoredAuth",
+        "AuthProvider",
+        "useAuth"
+      ],
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/main.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 12,
+      "sha256": "ba897cb330524d1e83e96629cdbff581f5896a28d0ad18c559f29728ad47eefe",
+      "summary": "Mounts React under BrowserRouter and imports global styles.",
+      "exports": [],
+      "imports": [
+        "react",
+        "react-dom/client",
+        "react-router-dom",
+        "./App",
+        "./styles.css"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/mockData.js",
+      "language": "JavaScript",
+      "lines_of_code": 128,
+      "sha256": "4adac2efc624c24ad20a10b3c8457e9157e8ac6206e1a5875ca2249f095c871d",
+      "summary": "Provides prototype products, categories, content, settings, orders, delivery options, and helpers.",
+      "exports": [
+        "media",
+        "categories",
+        "products",
+        "occasions",
+        "reviews",
+        "deliveryAreas",
+        "deliverySlots",
+        "storeSettings",
+        "cmsPages",
+        "faqs",
+        "adminNeedsAttention",
+        "adminTeam",
+        "auditLogs",
+        "notificationLogs",
+        "sampleOrders",
+        "sampleRequests",
+        "howItWorks",
+        "formatINR"
+      ],
+      "imports": [],
+      "key_symbols": [
+        "media",
+        "categories",
+        "products",
+        "occasions",
+        "reviews",
+        "deliveryAreas",
+        "deliverySlots",
+        "storeSettings",
+        "cmsPages",
+        "faqs",
+        "adminNeedsAttention",
+        "adminTeam",
+        "auditLogs",
+        "notificationLogs",
+        "sampleOrders",
+        "sampleRequests",
+        "howItWorks",
+        "formatINR"
+      ],
+      "tags": [
+        "frontend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/pages/AuthPage.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 332,
+      "sha256": "01f19bfce4767cd8d2869ad652c8d238df7154b482e497c421292d022555ff00",
+      "summary": "Renders login, signup, admin signup, and password recovery forms.",
+      "exports": [
+        "AuthPage"
+      ],
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "framer-motion",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "GradientShell",
+        "PillTabs",
+        "Field",
+        "AlertBox",
+        "PrimaryButton",
+        "GoogleButton",
+        "AuthPage"
+      ],
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/pages/ResetPasswordPage.jsx",
+      "language": "JavaScript (JSX)",
+      "lines_of_code": 161,
+      "sha256": "3ebb6b17f367625a5dff3e0274108941cca0cc84b55609e5d3faeed14cee4c41",
+      "summary": "Renders password reset using the URL token and auth context.",
+      "exports": [
+        "ResetPasswordPage"
+      ],
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "framer-motion",
+        "../context/AuthContext.jsx"
+      ],
+      "key_symbols": [
+        "AlertBox",
+        "Field",
+        "PrimaryButton",
+        "ResetPasswordPage"
+      ],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "src/styles.css",
+      "language": "CSS",
+      "lines_of_code": 490,
+      "sha256": "e3a197ce3f05955e51f6a821c77f163ec1510c62dec9f49d2b5b9e67c6f95b27",
+      "summary": "Contains app design tokens, responsive styles, and reduced-motion behavior.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "tailwind.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 13,
+      "sha256": "8493cc6743b9f6734434674a66d124994f3dd6213ac8ff1da7abf9505324f67a",
+      "summary": "Defines Tailwind content paths, palette extensions, and fonts.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "TODO.md",
+      "language": "Markdown",
+      "lines_of_code": 15,
+      "sha256": "b11639293df9e78ae038ed31b3896a97553377d85474dec83dbd28fbdc575eb0",
+      "summary": "Records product/backend scope, operations features, and desired implementation details.",
+      "exports": [],
+      "imports": [],
+      "key_symbols": [],
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "path": "vite.config.js",
+      "language": "JavaScript",
+      "lines_of_code": 7,
+      "sha256": "095c68919d300489014292586b6d2446b4709832b54638aba4067c65a14c599f",
+      "summary": "Configures React in Vite, dev ports, and /api proxy to Express.",
+      "exports": [],
+      "imports": [
+        "vite",
+        "@vitejs/plugin-react"
+      ],
+      "key_symbols": [],
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    }
+  ],
+  "nodes": [
+    {
+      "id": "file:.gitignore",
+      "type": "file",
+      "name": ".gitignore",
+      "file": ".gitignore",
+      "line": 1,
+      "summary": "Excludes dependencies, generated output, environment files, and optional database CA material.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:.trae/documents/auth_system_plan.md",
+      "type": "file",
+      "name": "auth_system_plan.md",
+      "file": ".trae/documents/auth_system_plan.md",
+      "line": 1,
+      "summary": "Planning notes for intended authentication behavior; compare with runtime auth implementation.",
+      "tags": [
+        "documentation",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:app.config.ts",
+      "type": "file",
+      "name": "app.config.ts",
+      "file": "app.config.ts",
+      "line": 1,
+      "summary": "Exports application logo metadata.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:Dockerfile",
+      "type": "file",
+      "name": "Dockerfile",
+      "file": "Dockerfile",
+      "line": 1,
+      "summary": "Builds the Vite frontend in Node 22 Alpine and starts production Express.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:index.html",
+      "type": "file",
+      "name": "index.html",
+      "file": "index.html",
+      "line": 1,
+      "summary": "Vite HTML shell containing root mount and page metadata.",
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:package.json",
+      "type": "file",
+      "name": "package.json",
+      "file": "package.json",
+      "line": 1,
+      "summary": "Defines the ESM npm project, scripts, dependency declarations, and build/run commands.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:plan.md",
+      "type": "file",
+      "name": "plan.md",
+      "file": "plan.md",
+      "line": 1,
+      "summary": "Documents initial storefront design direction, architecture intent, and future API seam.",
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:postcss.config.js",
+      "type": "file",
+      "name": "postcss.config.js",
+      "file": "postcss.config.js",
+      "line": 1,
+      "summary": "Enables Autoprefixer through PostCSS.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:public/manus-routes.json",
+      "type": "file",
+      "name": "manus-routes.json",
+      "file": "public/manus-routes.json",
+      "line": 1,
+      "summary": "Lists storefront, account, and admin route metadata.",
+      "tags": [],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:README.md",
+      "type": "file",
+      "name": "README.md",
+      "file": "README.md",
+      "line": 1,
+      "summary": "Describes the storefront, prototype routes, mock-data seam, backend, and local run/deploy model.",
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/auth.js",
+      "type": "file",
+      "name": "auth.js",
+      "file": "server/auth.js",
+      "line": 1,
+      "summary": "Implements password/JWT auth, admin/user middleware, Google identity, reset tokens, and config.",
+      "tags": [
+        "backend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/catalog.js",
+      "type": "file",
+      "name": "catalog.js",
+      "file": "server/catalog.js",
+      "line": 1,
+      "summary": "Adapts frontend mock catalogue/settings into backend exports and public products.",
+      "tags": [
+        "backend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/db.js",
+      "type": "file",
+      "name": "db.js",
+      "file": "server/db.js",
+      "line": 1,
+      "summary": "Creates/closes managed MySQL pool and reports database mode/SSL setup.",
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/index.js",
+      "type": "file",
+      "name": "index.js",
+      "file": "server/index.js",
+      "line": 1,
+      "summary": "Creates Express API, middleware, REST routes, and production SPA fallback.",
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrate.js",
+      "type": "file",
+      "name": "migrate.js",
+      "file": "server/migrate.js",
+      "line": 1,
+      "summary": "Applies ordered SQL migration statements to configured MySQL.",
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrations/001_initial.sql",
+      "type": "file",
+      "name": "001_initial.sql",
+      "file": "server/migrations/001_initial.sql",
+      "line": 1,
+      "summary": "Creates settings, product, delivery, order, request, notification, and audit tables.",
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrations/002_users_categories_resets.sql",
+      "type": "file",
+      "name": "002_users_categories_resets.sql",
+      "file": "server/migrations/002_users_categories_resets.sql",
+      "line": 1,
+      "summary": "Adds users, password reset tokens, and category tables.",
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrations/003_product_columns.sql",
+      "type": "file",
+      "name": "003_product_columns.sql",
+      "file": "server/migrations/003_product_columns.sql",
+      "line": 1,
+      "summary": "Adds product schema fields introduced after initial schema.",
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrations/004_admin_role_order_queries.sql",
+      "type": "file",
+      "name": "004_admin_role_order_queries.sql",
+      "file": "server/migrations/004_admin_role_order_queries.sql",
+      "line": 1,
+      "summary": "Adds order-query storage and order/user query support fields/indexes.",
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/migrations/005_estimated_pickup.sql",
+      "type": "file",
+      "name": "005_estimated_pickup.sql",
+      "file": "server/migrations/005_estimated_pickup.sql",
+      "line": 1,
+      "summary": "Adds estimated production and pickup date fields.",
+      "tags": [
+        "backend",
+        "database",
+        "migration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/notifications.js",
+      "type": "file",
+      "name": "notifications.js",
+      "file": "server/notifications.js",
+      "line": 1,
+      "summary": "Formats and sends configured owner/customer notifications.",
+      "tags": [
+        "backend",
+        "notifications"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/payments.js",
+      "type": "file",
+      "name": "payments.js",
+      "file": "server/payments.js",
+      "line": 1,
+      "summary": "Wraps optional Razorpay order creation and payment/webhook verification.",
+      "tags": [
+        "backend",
+        "payments"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/pricing.js",
+      "type": "file",
+      "name": "pricing.js",
+      "file": "server/pricing.js",
+      "line": 1,
+      "summary": "Defines Zod order/request schemas and authoritative server-side totals/payment policy.",
+      "tags": [
+        "backend",
+        "validation",
+        "pricing"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/README.md",
+      "type": "file",
+      "name": "README.md",
+      "file": "server/README.md",
+      "line": 1,
+      "summary": "Documents API startup, database commands, endpoint groups, and notification constraints.",
+      "tags": [
+        "backend",
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/repository.js",
+      "type": "file",
+      "name": "repository.js",
+      "file": "server/repository.js",
+      "line": 1,
+      "summary": "Provides memory/MySQL data access for catalogue, orders, users, settings, logs, and queries.",
+      "tags": [
+        "backend",
+        "persistence"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:server/seed.js",
+      "type": "file",
+      "name": "seed.js",
+      "file": "server/seed.js",
+      "line": 1,
+      "summary": "Seeds MySQL settings, catalogue, delivery areas, and slots from shared catalogue.",
+      "tags": [
+        "backend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/App.jsx",
+      "type": "file",
+      "name": "App.jsx",
+      "file": "src/App.jsx",
+      "line": 1,
+      "summary": "Implements client routes, storefront/admin pages, shared UI, cart/wishlist, and live data integration.",
+      "tags": [
+        "frontend",
+        "routing",
+        "storefront",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/components/ProtectedRoute.jsx",
+      "type": "file",
+      "name": "ProtectedRoute.jsx",
+      "file": "src/components/ProtectedRoute.jsx",
+      "line": 1,
+      "summary": "Guards client routes by authenticated and optional admin state.",
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/context/AuthContext.jsx",
+      "type": "file",
+      "name": "AuthContext.jsx",
+      "file": "src/context/AuthContext.jsx",
+      "line": 1,
+      "summary": "Provides auth state, localStorage persistence, API actions, and useAuth.",
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/main.jsx",
+      "type": "file",
+      "name": "main.jsx",
+      "file": "src/main.jsx",
+      "line": 1,
+      "summary": "Mounts React under BrowserRouter and imports global styles.",
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/mockData.js",
+      "type": "file",
+      "name": "mockData.js",
+      "file": "src/mockData.js",
+      "line": 1,
+      "summary": "Provides prototype products, categories, content, settings, orders, delivery options, and helpers.",
+      "tags": [
+        "frontend",
+        "catalog"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/pages/AuthPage.jsx",
+      "type": "file",
+      "name": "AuthPage.jsx",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 1,
+      "summary": "Renders login, signup, admin signup, and password recovery forms.",
+      "tags": [
+        "frontend",
+        "authentication"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/pages/ResetPasswordPage.jsx",
+      "type": "file",
+      "name": "ResetPasswordPage.jsx",
+      "file": "src/pages/ResetPasswordPage.jsx",
+      "line": 1,
+      "summary": "Renders password reset using the URL token and auth context.",
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:src/styles.css",
+      "type": "file",
+      "name": "styles.css",
+      "file": "src/styles.css",
+      "line": 1,
+      "summary": "Contains app design tokens, responsive styles, and reduced-motion behavior.",
+      "tags": [
+        "frontend"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:tailwind.config.js",
+      "type": "file",
+      "name": "tailwind.config.js",
+      "file": "tailwind.config.js",
+      "line": 1,
+      "summary": "Defines Tailwind content paths, palette extensions, and fonts.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:TODO.md",
+      "type": "file",
+      "name": "TODO.md",
+      "file": "TODO.md",
+      "line": 1,
+      "summary": "Records product/backend scope, operations features, and desired implementation details.",
+      "tags": [
+        "documentation"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "file:vite.config.js",
+      "type": "file",
+      "name": "vite.config.js",
+      "file": "vite.config.js",
+      "line": 1,
+      "summary": "Configures React in Vite, dev ports, and /api proxy to Express.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "func:server/auth.js::getAdminAccounts",
+      "type": "function",
+      "name": "getAdminAccounts",
+      "file": "server/auth.js",
+      "line": 15,
+      "signature": "function getAdminAccounts(...)",
+      "summary": "getAdminAccounts is declared in server/auth.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::admins",
+      "type": "function",
+      "name": "admins",
+      "file": "server/auth.js",
+      "line": 33,
+      "signature": "function admins(...)",
+      "summary": "admins is declared in server/auth.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::authenticateAdmin",
+      "type": "function",
+      "name": "authenticateAdmin",
+      "file": "server/auth.js",
+      "line": 37,
+      "signature": "function authenticateAdmin(...)",
+      "summary": "authenticateAdmin is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::requireAdminJWT",
+      "type": "function",
+      "name": "requireAdminJWT",
+      "file": "server/auth.js",
+      "line": 50,
+      "signature": "function requireAdminJWT(...)",
+      "summary": "requireAdminJWT is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::signUserToken",
+      "type": "function",
+      "name": "signUserToken",
+      "file": "server/auth.js",
+      "line": 73,
+      "signature": "function signUserToken(...)",
+      "summary": "signUserToken is declared in server/auth.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::sanitizeUser",
+      "type": "function",
+      "name": "sanitizeUser",
+      "file": "server/auth.js",
+      "line": 88,
+      "signature": "function sanitizeUser(...)",
+      "summary": "sanitizeUser is declared in server/auth.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::registerUser",
+      "type": "function",
+      "name": "registerUser",
+      "file": "server/auth.js",
+      "line": 93,
+      "signature": "function registerUser(...)",
+      "summary": "registerUser is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::registerAdmin",
+      "type": "function",
+      "name": "registerAdmin",
+      "file": "server/auth.js",
+      "line": 112,
+      "signature": "function registerAdmin(...)",
+      "summary": "registerAdmin is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::authenticateUser",
+      "type": "function",
+      "name": "authenticateUser",
+      "file": "server/auth.js",
+      "line": 137,
+      "signature": "function authenticateUser(...)",
+      "summary": "authenticateUser is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::authenticateGoogle",
+      "type": "function",
+      "name": "authenticateGoogle",
+      "file": "server/auth.js",
+      "line": 151,
+      "signature": "function authenticateGoogle(...)",
+      "summary": "authenticateGoogle is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::requireUserJWT",
+      "type": "function",
+      "name": "requireUserJWT",
+      "file": "server/auth.js",
+      "line": 174,
+      "signature": "function requireUserJWT(...)",
+      "summary": "requireUserJWT is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::optionalUserJWT",
+      "type": "function",
+      "name": "optionalUserJWT",
+      "file": "server/auth.js",
+      "line": 190,
+      "signature": "function optionalUserJWT(...)",
+      "summary": "optionalUserJWT is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::buildTransport",
+      "type": "function",
+      "name": "buildTransport",
+      "file": "server/auth.js",
+      "line": 202,
+      "signature": "function buildTransport(...)",
+      "summary": "buildTransport is declared in server/auth.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::generatePasswordResetToken",
+      "type": "function",
+      "name": "generatePasswordResetToken",
+      "file": "server/auth.js",
+      "line": 214,
+      "signature": "function generatePasswordResetToken(...)",
+      "summary": "generatePasswordResetToken is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::resetPasswordWithToken",
+      "type": "function",
+      "name": "resetPasswordWithToken",
+      "file": "server/auth.js",
+      "line": 257,
+      "signature": "function resetPasswordWithToken(...)",
+      "summary": "resetPasswordWithToken is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/auth.js::authConfig",
+      "type": "function",
+      "name": "authConfig",
+      "file": "server/auth.js",
+      "line": 285,
+      "signature": "function authConfig(...)",
+      "summary": "authConfig is declared in server/auth.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/catalog.js::publicProduct",
+      "type": "function",
+      "name": "publicProduct",
+      "file": "server/catalog.js",
+      "line": 13,
+      "signature": "function publicProduct(...)",
+      "summary": "publicProduct is declared in server/catalog.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/db.js::getDatabaseMode",
+      "type": "function",
+      "name": "getDatabaseMode",
+      "file": "server/db.js",
+      "line": 9,
+      "signature": "function getDatabaseMode(...)",
+      "summary": "getDatabaseMode is declared in server/db.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/db.js::buildSslOptions",
+      "type": "function",
+      "name": "buildSslOptions",
+      "file": "server/db.js",
+      "line": 13,
+      "signature": "function buildSslOptions(...)",
+      "summary": "buildSslOptions is declared in server/db.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/db.js::getPool",
+      "type": "function",
+      "name": "getPool",
+      "file": "server/db.js",
+      "line": 29,
+      "signature": "function getPool(...)",
+      "summary": "getPool is declared in server/db.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/db.js::closePool",
+      "type": "function",
+      "name": "closePool",
+      "file": "server/db.js",
+      "line": 63,
+      "signature": "function closePool(...)",
+      "summary": "closePool is declared in server/db.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/index.js::saveBase64Image",
+      "type": "function",
+      "name": "saveBase64Image",
+      "file": "server/index.js",
+      "line": 50,
+      "signature": "function saveBase64Image(...)",
+      "summary": "saveBase64Image is declared in server/index.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/migrate.js::buildSslOptions",
+      "type": "function",
+      "name": "buildSslOptions",
+      "file": "server/migrate.js",
+      "line": 16,
+      "signature": "function buildSslOptions(...)",
+      "summary": "buildSslOptions is declared in server/migrate.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::getTransporter",
+      "type": "function",
+      "name": "getTransporter",
+      "file": "server/notifications.js",
+      "line": 8,
+      "signature": "function getTransporter(...)",
+      "summary": "getTransporter is declared in server/notifications.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::notificationConfig",
+      "type": "function",
+      "name": "notificationConfig",
+      "file": "server/notifications.js",
+      "line": 25,
+      "signature": "function notificationConfig(...)",
+      "summary": "notificationConfig is declared in server/notifications.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::formatOrderHTML",
+      "type": "function",
+      "name": "formatOrderHTML",
+      "file": "server/notifications.js",
+      "line": 35,
+      "signature": "function formatOrderHTML(...)",
+      "summary": "formatOrderHTML is declared in server/notifications.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::formatCustomRequestHTML",
+      "type": "function",
+      "name": "formatCustomRequestHTML",
+      "file": "server/notifications.js",
+      "line": 76,
+      "signature": "function formatCustomRequestHTML(...)",
+      "summary": "formatCustomRequestHTML is declared in server/notifications.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::sendGmail",
+      "type": "function",
+      "name": "sendGmail",
+      "file": "server/notifications.js",
+      "line": 108,
+      "signature": "function sendGmail(...)",
+      "summary": "sendGmail is declared in server/notifications.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::notifyNewOrder",
+      "type": "function",
+      "name": "notifyNewOrder",
+      "file": "server/notifications.js",
+      "line": 123,
+      "signature": "function notifyNewOrder(...)",
+      "summary": "notifyNewOrder is declared in server/notifications.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::notifyNewCustomRequest",
+      "type": "function",
+      "name": "notifyNewCustomRequest",
+      "file": "server/notifications.js",
+      "line": 178,
+      "signature": "function notifyNewCustomRequest(...)",
+      "summary": "notifyNewCustomRequest is declared in server/notifications.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/notifications.js::sendOrderConfirmation",
+      "type": "function",
+      "name": "sendOrderConfirmation",
+      "file": "server/notifications.js",
+      "line": 201,
+      "signature": "function sendOrderConfirmation(...)",
+      "summary": "sendOrderConfirmation is declared in server/notifications.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::getRazorpay",
+      "type": "function",
+      "name": "getRazorpay",
+      "file": "server/payments.js",
+      "line": 6,
+      "signature": "function getRazorpay(...)",
+      "summary": "getRazorpay is declared in server/payments.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::paymentConfig",
+      "type": "function",
+      "name": "paymentConfig",
+      "file": "server/payments.js",
+      "line": 20,
+      "signature": "function paymentConfig(...)",
+      "summary": "paymentConfig is declared in server/payments.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::createRazorpayOrder",
+      "type": "function",
+      "name": "createRazorpayOrder",
+      "file": "server/payments.js",
+      "line": 30,
+      "signature": "function createRazorpayOrder(...)",
+      "summary": "createRazorpayOrder is declared in server/payments.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::verifyPaymentSignature",
+      "type": "function",
+      "name": "verifyPaymentSignature",
+      "file": "server/payments.js",
+      "line": 59,
+      "signature": "function verifyPaymentSignature(...)",
+      "summary": "verifyPaymentSignature is declared in server/payments.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::verifyWebhookSignature",
+      "type": "function",
+      "name": "verifyWebhookSignature",
+      "file": "server/payments.js",
+      "line": 76,
+      "signature": "function verifyWebhookSignature(...)",
+      "summary": "verifyWebhookSignature is declared in server/payments.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/payments.js::fetchPayment",
+      "type": "function",
+      "name": "fetchPayment",
+      "file": "server/payments.js",
+      "line": 86,
+      "signature": "function fetchPayment(...)",
+      "summary": "fetchPayment is declared in server/payments.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/pricing.js::calculateOrder",
+      "type": "function",
+      "name": "calculateOrder",
+      "file": "server/pricing.js",
+      "line": 51,
+      "signature": "function calculateOrder(...)",
+      "summary": "calculateOrder is declared in server/pricing.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::clone",
+      "type": "function",
+      "name": "clone",
+      "file": "server/repository.js",
+      "line": 5,
+      "signature": "function clone(...)",
+      "summary": "clone is declared in server/repository.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::parseJson",
+      "type": "function",
+      "name": "parseJson",
+      "file": "server/repository.js",
+      "line": 9,
+      "signature": "function parseJson(...)",
+      "summary": "parseJson is declared in server/repository.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::memoryRepository",
+      "type": "function",
+      "name": "memoryRepository",
+      "file": "server/repository.js",
+      "line": 57,
+      "signature": "function memoryRepository(...)",
+      "summary": "memoryRepository is declared in server/repository.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::mysqlRepository",
+      "type": "function",
+      "name": "mysqlRepository",
+      "file": "server/repository.js",
+      "line": 247,
+      "signature": "function mysqlRepository(...)",
+      "summary": "mysqlRepository is declared in server/repository.js.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::createRepository",
+      "type": "function",
+      "name": "createRepository",
+      "file": "server/repository.js",
+      "line": 632,
+      "signature": "function createRepository(...)",
+      "summary": "createRepository is declared in server/repository.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:server/repository.js::newEntityId",
+      "type": "function",
+      "name": "newEntityId",
+      "file": "server/repository.js",
+      "line": 674,
+      "signature": "function newEntityId(...)",
+      "summary": "newEntityId is declared in server/repository.js.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::useLiveData",
+      "type": "function",
+      "name": "useLiveData",
+      "file": "src/App.jsx",
+      "line": 32,
+      "signature": "function useLiveData(...)",
+      "summary": "useLiveData is declared in src/App.jsx.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Button",
+      "type": "component",
+      "name": "Button",
+      "file": "src/App.jsx",
+      "line": 55,
+      "signature": "function Button(...)",
+      "summary": "Button is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Badge",
+      "type": "component",
+      "name": "Badge",
+      "file": "src/App.jsx",
+      "line": 62,
+      "signature": "function Badge(...)",
+      "summary": "Badge is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::GlassCard",
+      "type": "component",
+      "name": "GlassCard",
+      "file": "src/App.jsx",
+      "line": 64,
+      "signature": "function GlassCard(...)",
+      "summary": "GlassCard is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::SectionHeading",
+      "type": "component",
+      "name": "SectionHeading",
+      "file": "src/App.jsx",
+      "line": 68,
+      "signature": "function SectionHeading(...)",
+      "summary": "SectionHeading is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::PriceTag",
+      "type": "component",
+      "name": "PriceTag",
+      "file": "src/App.jsx",
+      "line": 79,
+      "signature": "function PriceTag(...)",
+      "summary": "PriceTag is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::GradientBackground",
+      "type": "component",
+      "name": "GradientBackground",
+      "file": "src/App.jsx",
+      "line": 87,
+      "signature": "function GradientBackground(...)",
+      "summary": "GradientBackground is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AnnouncementBar",
+      "type": "component",
+      "name": "AnnouncementBar",
+      "file": "src/App.jsx",
+      "line": 97,
+      "signature": "function AnnouncementBar(...)",
+      "summary": "AnnouncementBar is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Navbar",
+      "type": "component",
+      "name": "Navbar",
+      "file": "src/App.jsx",
+      "line": 102,
+      "signature": "function Navbar(...)",
+      "summary": "Navbar is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Footer",
+      "type": "component",
+      "name": "Footer",
+      "file": "src/App.jsx",
+      "line": 288,
+      "signature": "function Footer(...)",
+      "summary": "Footer is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::WhatsAppFloat",
+      "type": "component",
+      "name": "WhatsAppFloat",
+      "file": "src/App.jsx",
+      "line": 306,
+      "signature": "function WhatsAppFloat(...)",
+      "summary": "WhatsAppFloat is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::ProductCard",
+      "type": "component",
+      "name": "ProductCard",
+      "file": "src/App.jsx",
+      "line": 308,
+      "signature": "function ProductCard(...)",
+      "summary": "ProductCard is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CategoryCard",
+      "type": "component",
+      "name": "CategoryCard",
+      "file": "src/App.jsx",
+      "line": 322,
+      "signature": "function CategoryCard(...)",
+      "summary": "CategoryCard is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Marquee",
+      "type": "component",
+      "name": "Marquee",
+      "file": "src/App.jsx",
+      "line": 328,
+      "signature": "function Marquee(...)",
+      "summary": "Marquee is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::Timeline",
+      "type": "component",
+      "name": "Timeline",
+      "file": "src/App.jsx",
+      "line": 330,
+      "signature": "function Timeline(...)",
+      "summary": "Timeline is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::HomePage",
+      "type": "component",
+      "name": "HomePage",
+      "file": "src/App.jsx",
+      "line": 336,
+      "signature": "function HomePage(...)",
+      "summary": "HomePage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::ShopPage",
+      "type": "component",
+      "name": "ShopPage",
+      "file": "src/App.jsx",
+      "line": 355,
+      "signature": "function ShopPage(...)",
+      "summary": "ShopPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::EmptyState",
+      "type": "component",
+      "name": "EmptyState",
+      "file": "src/App.jsx",
+      "line": 383,
+      "signature": "function EmptyState(...)",
+      "summary": "EmptyState is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::ProductPage",
+      "type": "component",
+      "name": "ProductPage",
+      "file": "src/App.jsx",
+      "line": 385,
+      "signature": "function ProductPage(...)",
+      "summary": "ProductPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CustomRequestPage",
+      "type": "component",
+      "name": "CustomRequestPage",
+      "file": "src/App.jsx",
+      "line": 399,
+      "signature": "function CustomRequestPage(...)",
+      "summary": "CustomRequestPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CartPage",
+      "type": "component",
+      "name": "CartPage",
+      "file": "src/App.jsx",
+      "line": 412,
+      "signature": "function CartPage(...)",
+      "summary": "CartPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CheckoutPage",
+      "type": "component",
+      "name": "CheckoutPage",
+      "file": "src/App.jsx",
+      "line": 418,
+      "signature": "function CheckoutPage(...)",
+      "summary": "CheckoutPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CheckoutContact",
+      "type": "component",
+      "name": "CheckoutContact",
+      "file": "src/App.jsx",
+      "line": 487,
+      "signature": "function CheckoutContact(...)",
+      "summary": "CheckoutContact is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CheckoutDelivery",
+      "type": "component",
+      "name": "CheckoutDelivery",
+      "file": "src/App.jsx",
+      "line": 493,
+      "signature": "function CheckoutDelivery(...)",
+      "summary": "CheckoutDelivery is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CheckoutPayment",
+      "type": "component",
+      "name": "CheckoutPayment",
+      "file": "src/App.jsx",
+      "line": 504,
+      "signature": "function CheckoutPayment(...)",
+      "summary": "CheckoutPayment is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CheckoutReview",
+      "type": "component",
+      "name": "CheckoutReview",
+      "file": "src/App.jsx",
+      "line": 513,
+      "signature": "function CheckoutReview(...)",
+      "summary": "CheckoutReview is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AccountPage",
+      "type": "component",
+      "name": "AccountPage",
+      "file": "src/App.jsx",
+      "line": 517,
+      "signature": "function AccountPage(...)",
+      "summary": "AccountPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::TrackOrderPage",
+      "type": "component",
+      "name": "TrackOrderPage",
+      "file": "src/App.jsx",
+      "line": 527,
+      "signature": "function TrackOrderPage(...)",
+      "summary": "TrackOrderPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AboutPage",
+      "type": "component",
+      "name": "AboutPage",
+      "file": "src/App.jsx",
+      "line": 672,
+      "signature": "function AboutPage(...)",
+      "summary": "AboutPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::ContentPage",
+      "type": "component",
+      "name": "ContentPage",
+      "file": "src/App.jsx",
+      "line": 676,
+      "signature": "function ContentPage(...)",
+      "summary": "ContentPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::fileToBase64",
+      "type": "function",
+      "name": "fileToBase64",
+      "file": "src/App.jsx",
+      "line": 683,
+      "signature": "function fileToBase64(...)",
+      "summary": "fileToBase64 is declared in src/App.jsx.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminProductsPanel",
+      "type": "component",
+      "name": "AdminProductsPanel",
+      "file": "src/App.jsx",
+      "line": 692,
+      "signature": "function AdminProductsPanel(...)",
+      "summary": "AdminProductsPanel is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminCategoriesPanel",
+      "type": "component",
+      "name": "AdminCategoriesPanel",
+      "file": "src/App.jsx",
+      "line": 1043,
+      "signature": "function AdminCategoriesPanel(...)",
+      "summary": "AdminCategoriesPanel is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminOrdersPanel",
+      "type": "component",
+      "name": "AdminOrdersPanel",
+      "file": "src/App.jsx",
+      "line": 1199,
+      "signature": "function AdminOrdersPanel(...)",
+      "summary": "AdminOrdersPanel is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminOrderQueriesPanel",
+      "type": "component",
+      "name": "AdminOrderQueriesPanel",
+      "file": "src/App.jsx",
+      "line": 1295,
+      "signature": "function AdminOrderQueriesPanel(...)",
+      "summary": "AdminOrderQueriesPanel is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminOpsPanel",
+      "type": "component",
+      "name": "AdminOpsPanel",
+      "file": "src/App.jsx",
+      "line": 1381,
+      "signature": "function AdminOpsPanel(...)",
+      "summary": "AdminOpsPanel is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminLoginPage",
+      "type": "component",
+      "name": "AdminLoginPage",
+      "file": "src/App.jsx",
+      "line": 1399,
+      "signature": "function AdminLoginPage(...)",
+      "summary": "AdminLoginPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::AdminPage",
+      "type": "component",
+      "name": "AdminPage",
+      "file": "src/App.jsx",
+      "line": 1490,
+      "signature": "function AdminPage(...)",
+      "summary": "AdminPage is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::LiveDataProvider",
+      "type": "component",
+      "name": "LiveDataProvider",
+      "file": "src/App.jsx",
+      "line": 1518,
+      "signature": "function LiveDataProvider(...)",
+      "summary": "LiveDataProvider is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::useLive",
+      "type": "function",
+      "name": "useLive",
+      "file": "src/App.jsx",
+      "line": 1522,
+      "signature": "function useLive(...)",
+      "summary": "useLive is declared in src/App.jsx.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::CategoryRoute",
+      "type": "component",
+      "name": "CategoryRoute",
+      "file": "src/App.jsx",
+      "line": 1523,
+      "signature": "function CategoryRoute(...)",
+      "summary": "CategoryRoute is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::OccasionRoute",
+      "type": "component",
+      "name": "OccasionRoute",
+      "file": "src/App.jsx",
+      "line": 1529,
+      "signature": "function OccasionRoute(...)",
+      "summary": "OccasionRoute is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/App.jsx::App",
+      "type": "component",
+      "name": "App",
+      "file": "src/App.jsx",
+      "line": 1535,
+      "signature": "function App(...)",
+      "summary": "App is declared in src/App.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/components/ProtectedRoute.jsx::ProtectedRoute",
+      "type": "component",
+      "name": "ProtectedRoute",
+      "file": "src/components/ProtectedRoute.jsx",
+      "line": 3,
+      "signature": "function ProtectedRoute(...)",
+      "summary": "ProtectedRoute is declared in src/components/ProtectedRoute.jsx.",
+      "tags": [
+        "react-component",
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/context/AuthContext.jsx::readStoredAuth",
+      "type": "function",
+      "name": "readStoredAuth",
+      "file": "src/context/AuthContext.jsx",
+      "line": 7,
+      "signature": "function readStoredAuth(...)",
+      "summary": "readStoredAuth is declared in src/context/AuthContext.jsx.",
+      "tags": [],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/context/AuthContext.jsx::AuthProvider",
+      "type": "component",
+      "name": "AuthProvider",
+      "file": "src/context/AuthContext.jsx",
+      "line": 18,
+      "signature": "function AuthProvider(...)",
+      "summary": "AuthProvider is declared in src/context/AuthContext.jsx.",
+      "tags": [
+        "react-component",
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/context/AuthContext.jsx::useAuth",
+      "type": "function",
+      "name": "useAuth",
+      "file": "src/context/AuthContext.jsx",
+      "line": 142,
+      "signature": "function useAuth(...)",
+      "summary": "useAuth is declared in src/context/AuthContext.jsx.",
+      "tags": [
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::GradientShell",
+      "type": "component",
+      "name": "GradientShell",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 12,
+      "signature": "function GradientShell(...)",
+      "summary": "GradientShell is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::PillTabs",
+      "type": "component",
+      "name": "PillTabs",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 34,
+      "signature": "function PillTabs(...)",
+      "summary": "PillTabs is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::Field",
+      "type": "component",
+      "name": "Field",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 56,
+      "signature": "function Field(...)",
+      "summary": "Field is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::AlertBox",
+      "type": "component",
+      "name": "AlertBox",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 95,
+      "signature": "function AlertBox(...)",
+      "summary": "AlertBox is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::PrimaryButton",
+      "type": "component",
+      "name": "PrimaryButton",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 106,
+      "signature": "function PrimaryButton(...)",
+      "summary": "PrimaryButton is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::GoogleButton",
+      "type": "component",
+      "name": "GoogleButton",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 129,
+      "signature": "function GoogleButton(...)",
+      "summary": "GoogleButton is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/AuthPage.jsx::AuthPage",
+      "type": "component",
+      "name": "AuthPage",
+      "file": "src/pages/AuthPage.jsx",
+      "line": 150,
+      "signature": "function AuthPage(...)",
+      "summary": "AuthPage is declared in src/pages/AuthPage.jsx.",
+      "tags": [
+        "react-component",
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/ResetPasswordPage.jsx::AlertBox",
+      "type": "component",
+      "name": "AlertBox",
+      "file": "src/pages/ResetPasswordPage.jsx",
+      "line": 6,
+      "signature": "function AlertBox(...)",
+      "summary": "AlertBox is declared in src/pages/ResetPasswordPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/ResetPasswordPage.jsx::Field",
+      "type": "component",
+      "name": "Field",
+      "file": "src/pages/ResetPasswordPage.jsx",
+      "line": 17,
+      "signature": "function Field(...)",
+      "summary": "Field is declared in src/pages/ResetPasswordPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/ResetPasswordPage.jsx::PrimaryButton",
+      "type": "component",
+      "name": "PrimaryButton",
+      "file": "src/pages/ResetPasswordPage.jsx",
+      "line": 48,
+      "signature": "function PrimaryButton(...)",
+      "summary": "PrimaryButton is declared in src/pages/ResetPasswordPage.jsx.",
+      "tags": [
+        "react-component"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "func:src/pages/ResetPasswordPage.jsx::ResetPasswordPage",
+      "type": "component",
+      "name": "ResetPasswordPage",
+      "file": "src/pages/ResetPasswordPage.jsx",
+      "line": 71,
+      "signature": "function ResetPasswordPage(...)",
+      "summary": "ResetPasswordPage is declared in src/pages/ResetPasswordPage.jsx.",
+      "tags": [
+        "react-component",
+        "exported"
+      ],
+      "confidence": 0.78
+    },
+    {
+      "id": "route:GET /api/health",
+      "type": "route",
+      "name": "GET /api/health",
+      "file": "server/index.js",
+      "line": 71,
+      "signature": "GET /api/health",
+      "summary": "Express endpoint handles GET /api/health.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/products",
+      "type": "route",
+      "name": "GET /api/products",
+      "file": "server/index.js",
+      "line": 81,
+      "signature": "GET /api/products",
+      "summary": "Express endpoint handles GET /api/products.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/categories",
+      "type": "route",
+      "name": "GET /api/categories",
+      "file": "server/index.js",
+      "line": 88,
+      "signature": "GET /api/categories",
+      "summary": "Express endpoint handles GET /api/categories.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/settings/public",
+      "type": "route",
+      "name": "GET /api/settings/public",
+      "file": "server/index.js",
+      "line": 93,
+      "signature": "GET /api/settings/public",
+      "summary": "Express endpoint handles GET /api/settings/public.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/delivery/areas",
+      "type": "route",
+      "name": "GET /api/delivery/areas",
+      "file": "server/index.js",
+      "line": 108,
+      "signature": "GET /api/delivery/areas",
+      "summary": "Express endpoint handles GET /api/delivery/areas.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/orders",
+      "type": "route",
+      "name": "POST /api/orders",
+      "file": "server/index.js",
+      "line": 114,
+      "signature": "POST /api/orders",
+      "summary": "Express endpoint handles POST /api/orders.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/payments/verify",
+      "type": "route",
+      "name": "POST /api/payments/verify",
+      "file": "server/index.js",
+      "line": 166,
+      "signature": "POST /api/payments/verify",
+      "summary": "Express endpoint handles POST /api/payments/verify.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/payments/webhook",
+      "type": "route",
+      "name": "POST /api/payments/webhook",
+      "file": "server/index.js",
+      "line": 193,
+      "signature": "POST /api/payments/webhook",
+      "summary": "Express endpoint handles POST /api/payments/webhook.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/orders",
+      "type": "route",
+      "name": "GET /api/orders",
+      "file": "server/index.js",
+      "line": 215,
+      "signature": "GET /api/orders",
+      "summary": "Express endpoint handles GET /api/orders.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/orders/:id",
+      "type": "route",
+      "name": "GET /api/orders/:id",
+      "file": "server/index.js",
+      "line": 222,
+      "signature": "GET /api/orders/:id",
+      "summary": "Express endpoint handles GET /api/orders/:id.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/orders/:id/queries",
+      "type": "route",
+      "name": "POST /api/orders/:id/queries",
+      "file": "server/index.js",
+      "line": 236,
+      "signature": "POST /api/orders/:id/queries",
+      "summary": "Express endpoint handles POST /api/orders/:id/queries.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/orders/:id/queries",
+      "type": "route",
+      "name": "GET /api/orders/:id/queries",
+      "file": "server/index.js",
+      "line": 256,
+      "signature": "GET /api/orders/:id/queries",
+      "summary": "Express endpoint handles GET /api/orders/:id/queries.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/custom-requests",
+      "type": "route",
+      "name": "POST /api/custom-requests",
+      "file": "server/index.js",
+      "line": 268,
+      "signature": "POST /api/custom-requests",
+      "summary": "Express endpoint handles POST /api/custom-requests.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/register",
+      "type": "route",
+      "name": "POST /api/auth/register",
+      "file": "server/index.js",
+      "line": 291,
+      "signature": "POST /api/auth/register",
+      "summary": "Express endpoint handles POST /api/auth/register.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/admin-register",
+      "type": "route",
+      "name": "POST /api/auth/admin-register",
+      "file": "server/index.js",
+      "line": 305,
+      "signature": "POST /api/auth/admin-register",
+      "summary": "Express endpoint handles POST /api/auth/admin-register.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/login",
+      "type": "route",
+      "name": "POST /api/auth/login",
+      "file": "server/index.js",
+      "line": 323,
+      "signature": "POST /api/auth/login",
+      "summary": "Express endpoint handles POST /api/auth/login.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/google",
+      "type": "route",
+      "name": "POST /api/auth/google",
+      "file": "server/index.js",
+      "line": 340,
+      "signature": "POST /api/auth/google",
+      "summary": "Express endpoint handles POST /api/auth/google.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/auth/config",
+      "type": "route",
+      "name": "GET /api/auth/config",
+      "file": "server/index.js",
+      "line": 369,
+      "signature": "GET /api/auth/config",
+      "summary": "Express endpoint handles GET /api/auth/config.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/forgot-password",
+      "type": "route",
+      "name": "POST /api/auth/forgot-password",
+      "file": "server/index.js",
+      "line": 374,
+      "signature": "POST /api/auth/forgot-password",
+      "summary": "Express endpoint handles POST /api/auth/forgot-password.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/auth/reset-password",
+      "type": "route",
+      "name": "POST /api/auth/reset-password",
+      "file": "server/index.js",
+      "line": 383,
+      "signature": "POST /api/auth/reset-password",
+      "summary": "Express endpoint handles POST /api/auth/reset-password.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/auth/me",
+      "type": "route",
+      "name": "GET /api/auth/me",
+      "file": "server/index.js",
+      "line": 396,
+      "signature": "GET /api/auth/me",
+      "summary": "Express endpoint handles GET /api/auth/me.",
+      "tags": [
+        "api",
+        "express",
+        "api"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/admin/login",
+      "type": "route",
+      "name": "POST /api/admin/login",
+      "file": "server/index.js",
+      "line": 408,
+      "signature": "POST /api/admin/login",
+      "summary": "Express endpoint handles POST /api/admin/login.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/me",
+      "type": "route",
+      "name": "GET /api/admin/me",
+      "file": "server/index.js",
+      "line": 424,
+      "signature": "GET /api/admin/me",
+      "summary": "Express endpoint handles GET /api/admin/me.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/summary",
+      "type": "route",
+      "name": "GET /api/admin/summary",
+      "file": "server/index.js",
+      "line": 432,
+      "signature": "GET /api/admin/summary",
+      "summary": "Express endpoint handles GET /api/admin/summary.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/orders",
+      "type": "route",
+      "name": "GET /api/admin/orders",
+      "file": "server/index.js",
+      "line": 437,
+      "signature": "GET /api/admin/orders",
+      "summary": "Express endpoint handles GET /api/admin/orders.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/orders/:id",
+      "type": "route",
+      "name": "GET /api/admin/orders/:id",
+      "file": "server/index.js",
+      "line": 442,
+      "signature": "GET /api/admin/orders/:id",
+      "summary": "Express endpoint handles GET /api/admin/orders/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/orders/:id/status",
+      "type": "route",
+      "name": "PATCH /api/admin/orders/:id/status",
+      "file": "server/index.js",
+      "line": 450,
+      "signature": "PATCH /api/admin/orders/:id/status",
+      "summary": "Express endpoint handles PATCH /api/admin/orders/:id/status.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/orders/:id/location",
+      "type": "route",
+      "name": "PATCH /api/admin/orders/:id/location",
+      "file": "server/index.js",
+      "line": 463,
+      "signature": "PATCH /api/admin/orders/:id/location",
+      "summary": "Express endpoint handles PATCH /api/admin/orders/:id/location.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/orders/:id/estimated-date",
+      "type": "route",
+      "name": "PATCH /api/admin/orders/:id/estimated-date",
+      "file": "server/index.js",
+      "line": 475,
+      "signature": "PATCH /api/admin/orders/:id/estimated-date",
+      "summary": "Express endpoint handles PATCH /api/admin/orders/:id/estimated-date.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/order-queries",
+      "type": "route",
+      "name": "GET /api/admin/order-queries",
+      "file": "server/index.js",
+      "line": 485,
+      "signature": "GET /api/admin/order-queries",
+      "summary": "Express endpoint handles GET /api/admin/order-queries.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/order-queries/:id/reply",
+      "type": "route",
+      "name": "PATCH /api/admin/order-queries/:id/reply",
+      "file": "server/index.js",
+      "line": 490,
+      "signature": "PATCH /api/admin/order-queries/:id/reply",
+      "summary": "Express endpoint handles PATCH /api/admin/order-queries/:id/reply.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/custom-requests",
+      "type": "route",
+      "name": "GET /api/admin/custom-requests",
+      "file": "server/index.js",
+      "line": 503,
+      "signature": "GET /api/admin/custom-requests",
+      "summary": "Express endpoint handles GET /api/admin/custom-requests.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/custom-requests/:id",
+      "type": "route",
+      "name": "GET /api/admin/custom-requests/:id",
+      "file": "server/index.js",
+      "line": 508,
+      "signature": "GET /api/admin/custom-requests/:id",
+      "summary": "Express endpoint handles GET /api/admin/custom-requests/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/custom-requests/:id/status",
+      "type": "route",
+      "name": "PATCH /api/admin/custom-requests/:id/status",
+      "file": "server/index.js",
+      "line": 516,
+      "signature": "PATCH /api/admin/custom-requests/:id/status",
+      "summary": "Express endpoint handles PATCH /api/admin/custom-requests/:id/status.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/settings",
+      "type": "route",
+      "name": "PATCH /api/admin/settings",
+      "file": "server/index.js",
+      "line": 530,
+      "signature": "PATCH /api/admin/settings",
+      "summary": "Express endpoint handles PATCH /api/admin/settings.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/products",
+      "type": "route",
+      "name": "GET /api/admin/products",
+      "file": "server/index.js",
+      "line": 538,
+      "signature": "GET /api/admin/products",
+      "summary": "Express endpoint handles GET /api/admin/products.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/products/:id",
+      "type": "route",
+      "name": "GET /api/admin/products/:id",
+      "file": "server/index.js",
+      "line": 575,
+      "signature": "GET /api/admin/products/:id",
+      "summary": "Express endpoint handles GET /api/admin/products/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/admin/products",
+      "type": "route",
+      "name": "POST /api/admin/products",
+      "file": "server/index.js",
+      "line": 583,
+      "signature": "POST /api/admin/products",
+      "summary": "Express endpoint handles POST /api/admin/products.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/products/:id",
+      "type": "route",
+      "name": "PATCH /api/admin/products/:id",
+      "file": "server/index.js",
+      "line": 597,
+      "signature": "PATCH /api/admin/products/:id",
+      "summary": "Express endpoint handles PATCH /api/admin/products/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:DELETE /api/admin/products/:id",
+      "type": "route",
+      "name": "DELETE /api/admin/products/:id",
+      "file": "server/index.js",
+      "line": 610,
+      "signature": "DELETE /api/admin/products/:id",
+      "summary": "Express endpoint handles DELETE /api/admin/products/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/categories",
+      "type": "route",
+      "name": "GET /api/admin/categories",
+      "file": "server/index.js",
+      "line": 619,
+      "signature": "GET /api/admin/categories",
+      "summary": "Express endpoint handles GET /api/admin/categories.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/admin/categories",
+      "type": "route",
+      "name": "POST /api/admin/categories",
+      "file": "server/index.js",
+      "line": 626,
+      "signature": "POST /api/admin/categories",
+      "summary": "Express endpoint handles POST /api/admin/categories.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:PATCH /api/admin/categories/:id",
+      "type": "route",
+      "name": "PATCH /api/admin/categories/:id",
+      "file": "server/index.js",
+      "line": 639,
+      "signature": "PATCH /api/admin/categories/:id",
+      "summary": "Express endpoint handles PATCH /api/admin/categories/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:DELETE /api/admin/categories/:id",
+      "type": "route",
+      "name": "DELETE /api/admin/categories/:id",
+      "file": "server/index.js",
+      "line": 652,
+      "signature": "DELETE /api/admin/categories/:id",
+      "summary": "Express endpoint handles DELETE /api/admin/categories/:id.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:POST /api/admin/upload",
+      "type": "route",
+      "name": "POST /api/admin/upload",
+      "file": "server/index.js",
+      "line": 661,
+      "signature": "POST /api/admin/upload",
+      "summary": "Express endpoint handles POST /api/admin/upload.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/audit-logs",
+      "type": "route",
+      "name": "GET /api/admin/audit-logs",
+      "file": "server/index.js",
+      "line": 671,
+      "signature": "GET /api/admin/audit-logs",
+      "summary": "Express endpoint handles GET /api/admin/audit-logs.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /api/admin/notification-logs",
+      "type": "route",
+      "name": "GET /api/admin/notification-logs",
+      "file": "server/index.js",
+      "line": 678,
+      "signature": "GET /api/admin/notification-logs",
+      "summary": "Express endpoint handles GET /api/admin/notification-logs.",
+      "tags": [
+        "api",
+        "express",
+        "admin"
+      ],
+      "confidence": 0.96
+    },
+    {
+      "id": "route:GET /",
+      "type": "route",
+      "name": "GET /",
+      "file": "src/App.jsx",
+      "line": 1575,
+      "signature": "GET /",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /login",
+      "type": "route",
+      "name": "GET /login",
+      "file": "src/App.jsx",
+      "line": 1578,
+      "signature": "GET /login",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /signup",
+      "type": "route",
+      "name": "GET /signup",
+      "file": "src/App.jsx",
+      "line": 1579,
+      "signature": "GET /signup",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /forgot-password",
+      "type": "route",
+      "name": "GET /forgot-password",
+      "file": "src/App.jsx",
+      "line": 1580,
+      "signature": "GET /forgot-password",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /reset-password",
+      "type": "route",
+      "name": "GET /reset-password",
+      "file": "src/App.jsx",
+      "line": 1581,
+      "signature": "GET /reset-password",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /shop",
+      "type": "route",
+      "name": "GET /shop",
+      "file": "src/App.jsx",
+      "line": 1584,
+      "signature": "GET /shop",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /category/:slug",
+      "type": "route",
+      "name": "GET /category/:slug",
+      "file": "src/App.jsx",
+      "line": 1585,
+      "signature": "GET /category/:slug",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /occasion/:occasion",
+      "type": "route",
+      "name": "GET /occasion/:occasion",
+      "file": "src/App.jsx",
+      "line": 1586,
+      "signature": "GET /occasion/:occasion",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /product/:slug",
+      "type": "route",
+      "name": "GET /product/:slug",
+      "file": "src/App.jsx",
+      "line": 1587,
+      "signature": "GET /product/:slug",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /custom-request",
+      "type": "route",
+      "name": "GET /custom-request",
+      "file": "src/App.jsx",
+      "line": 1588,
+      "signature": "GET /custom-request",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /cart",
+      "type": "route",
+      "name": "GET /cart",
+      "file": "src/App.jsx",
+      "line": 1589,
+      "signature": "GET /cart",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /checkout",
+      "type": "route",
+      "name": "GET /checkout",
+      "file": "src/App.jsx",
+      "line": 1590,
+      "signature": "GET /checkout",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /track-order",
+      "type": "route",
+      "name": "GET /track-order",
+      "file": "src/App.jsx",
+      "line": 1591,
+      "signature": "GET /track-order",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /about",
+      "type": "route",
+      "name": "GET /about",
+      "file": "src/App.jsx",
+      "line": 1592,
+      "signature": "GET /about",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /pages/:slug",
+      "type": "route",
+      "name": "GET /pages/:slug",
+      "file": "src/App.jsx",
+      "line": 1593,
+      "signature": "GET /pages/:slug",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /account",
+      "type": "route",
+      "name": "GET /account",
+      "file": "src/App.jsx",
+      "line": 1596,
+      "signature": "GET /account",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /account/requests/:id",
+      "type": "route",
+      "name": "GET /account/requests/:id",
+      "file": "src/App.jsx",
+      "line": 1597,
+      "signature": "GET /account/requests/:id",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET /admin",
+      "type": "route",
+      "name": "GET /admin",
+      "file": "src/App.jsx",
+      "line": 1600,
+      "signature": "GET /admin",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "route:GET *",
+      "type": "route",
+      "name": "GET *",
+      "file": "src/App.jsx",
+      "line": 1603,
+      "signature": "GET *",
+      "summary": "Client-side route renders the matching storefront or account screen.",
+      "tags": [
+        "client-route",
+        "react-router"
+      ],
+      "confidence": 0.84
+    },
+    {
+      "id": "table:site_settings",
+      "type": "database_table",
+      "name": "site_settings",
+      "file": "server/migrations/001_initial.sql",
+      "line": 1,
+      "signature": "CREATE TABLE site_settings",
+      "summary": "Stores storefront controls and operational settings.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:products",
+      "type": "database_table",
+      "name": "products",
+      "file": "server/migrations/001_initial.sql",
+      "line": 20,
+      "signature": "CREATE TABLE products",
+      "summary": "Stores catalogue products and customization/pricing fields.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:delivery_areas",
+      "type": "database_table",
+      "name": "delivery_areas",
+      "file": "server/migrations/001_initial.sql",
+      "line": 47,
+      "signature": "CREATE TABLE delivery_areas",
+      "summary": "Stores delivery areas and approval requirements.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:delivery_slots",
+      "type": "database_table",
+      "name": "delivery_slots",
+      "file": "server/migrations/001_initial.sql",
+      "line": 57,
+      "signature": "CREATE TABLE delivery_slots",
+      "summary": "Stores delivery slot availability.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:orders",
+      "type": "database_table",
+      "name": "orders",
+      "file": "server/migrations/001_initial.sql",
+      "line": 66,
+      "signature": "CREATE TABLE orders",
+      "summary": "Stores customer orders, delivery, pricing, and payment status.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:order_items",
+      "type": "database_table",
+      "name": "order_items",
+      "file": "server/migrations/001_initial.sql",
+      "line": 94,
+      "signature": "CREATE TABLE order_items",
+      "summary": "Stores order line items.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:custom_requests",
+      "type": "database_table",
+      "name": "custom_requests",
+      "file": "server/migrations/001_initial.sql",
+      "line": 107,
+      "signature": "CREATE TABLE custom_requests",
+      "summary": "Stores customer custom-work requests and quote state.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:notification_logs",
+      "type": "database_table",
+      "name": "notification_logs",
+      "file": "server/migrations/001_initial.sql",
+      "line": 129,
+      "signature": "CREATE TABLE notification_logs",
+      "summary": "Records notification attempts.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:audit_logs",
+      "type": "database_table",
+      "name": "audit_logs",
+      "file": "server/migrations/001_initial.sql",
+      "line": 140,
+      "signature": "CREATE TABLE audit_logs",
+      "summary": "Records administrative changes.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:users",
+      "type": "database_table",
+      "name": "users",
+      "file": "server/migrations/002_users_categories_resets.sql",
+      "line": 1,
+      "signature": "CREATE TABLE users",
+      "summary": "Stores customer/admin identity records.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:password_reset_tokens",
+      "type": "database_table",
+      "name": "password_reset_tokens",
+      "file": "server/migrations/002_users_categories_resets.sql",
+      "line": 17,
+      "signature": "CREATE TABLE password_reset_tokens",
+      "summary": "Stores hashed expiring password reset tokens.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:categories",
+      "type": "database_table",
+      "name": "categories",
+      "file": "server/migrations/002_users_categories_resets.sql",
+      "line": 29,
+      "signature": "CREATE TABLE categories",
+      "summary": "Stores product categories.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "table:order_queries",
+      "type": "database_table",
+      "name": "order_queries",
+      "file": "server/migrations/004_admin_role_order_queries.sql",
+      "line": 4,
+      "signature": "CREATE TABLE order_queries",
+      "summary": "Stores customer/admin messages associated with orders.",
+      "tags": [
+        "mysql",
+        "database"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "id": "dep:@vitejs/plugin-react",
+      "type": "external_dependency",
+      "name": "@vitejs/plugin-react",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency @vitejs/plugin-react (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:autoprefixer",
+      "type": "external_dependency",
+      "name": "autoprefixer",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency autoprefixer (latest).",
+      "tags": [
+        "development"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:bcryptjs",
+      "type": "external_dependency",
+      "name": "bcryptjs",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^3.0.3",
+      "summary": "Declared npm dependency bcryptjs (^3.0.3).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:cors",
+      "type": "external_dependency",
+      "name": "cors",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^2.8.6",
+      "summary": "Declared npm dependency cors (^2.8.6).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:dotenv",
+      "type": "external_dependency",
+      "name": "dotenv",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^18.0.5",
+      "summary": "Declared npm dependency dotenv (^18.0.5).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:express",
+      "type": "external_dependency",
+      "name": "express",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^5.2.1",
+      "summary": "Declared npm dependency express (^5.2.1).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:framer-motion",
+      "type": "external_dependency",
+      "name": "framer-motion",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency framer-motion (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:helmet",
+      "type": "external_dependency",
+      "name": "helmet",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^8.3.0",
+      "summary": "Declared npm dependency helmet (^8.3.0).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:jsonwebtoken",
+      "type": "external_dependency",
+      "name": "jsonwebtoken",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^9.0.3",
+      "summary": "Declared npm dependency jsonwebtoken (^9.0.3).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:lucide-react",
+      "type": "external_dependency",
+      "name": "lucide-react",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency lucide-react (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:mysql2",
+      "type": "external_dependency",
+      "name": "mysql2",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^3.24.5",
+      "summary": "Declared npm dependency mysql2 (^3.24.5).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:nodemailer",
+      "type": "external_dependency",
+      "name": "nodemailer",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^10.0.14",
+      "summary": "Declared npm dependency nodemailer (^10.0.14).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:postcss",
+      "type": "external_dependency",
+      "name": "postcss",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency postcss (latest).",
+      "tags": [
+        "development"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:razorpay",
+      "type": "external_dependency",
+      "name": "razorpay",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^2.9.8",
+      "summary": "Declared npm dependency razorpay (^2.9.8).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:react",
+      "type": "external_dependency",
+      "name": "react",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency react (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:react-dom",
+      "type": "external_dependency",
+      "name": "react-dom",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency react-dom (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:react-router-dom",
+      "type": "external_dependency",
+      "name": "react-router-dom",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency react-router-dom (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:tailwindcss",
+      "type": "external_dependency",
+      "name": "tailwindcss",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency tailwindcss (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:vite",
+      "type": "external_dependency",
+      "name": "vite",
+      "file": "package.json",
+      "line": 1,
+      "signature": "latest",
+      "summary": "Declared npm dependency vite (latest).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "dep:zod",
+      "type": "external_dependency",
+      "name": "zod",
+      "file": "package.json",
+      "line": 1,
+      "signature": "^4.6.5",
+      "summary": "Declared npm dependency zod (^4.6.5).",
+      "tags": [
+        "runtime"
+      ],
+      "confidence": 0.99
+    },
+    {
+      "id": "config:package.json",
+      "type": "config",
+      "name": "package.json",
+      "file": "package.json",
+      "line": 1,
+      "summary": "Defines the ESM npm project, scripts, dependency declarations, and build/run commands.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    },
+    {
+      "id": "config:vite.config.js",
+      "type": "config",
+      "name": "vite.config.js",
+      "file": "vite.config.js",
+      "line": 1,
+      "summary": "Configures React in Vite, dev ports, and /api proxy to Express.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    },
+    {
+      "id": "config:tailwind.config.js",
+      "type": "config",
+      "name": "tailwind.config.js",
+      "file": "tailwind.config.js",
+      "line": 1,
+      "summary": "Defines Tailwind content paths, palette extensions, and fonts.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    },
+    {
+      "id": "config:postcss.config.js",
+      "type": "config",
+      "name": "postcss.config.js",
+      "file": "postcss.config.js",
+      "line": 1,
+      "summary": "Enables Autoprefixer through PostCSS.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    },
+    {
+      "id": "config:app.config.ts",
+      "type": "config",
+      "name": "app.config.ts",
+      "file": "app.config.ts",
+      "line": 1,
+      "summary": "Exports application logo metadata.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    },
+    {
+      "id": "config:Dockerfile",
+      "type": "config",
+      "name": "Dockerfile",
+      "file": "Dockerfile",
+      "line": 1,
+      "summary": "Builds the Vite frontend in Node 22 Alpine and starts production Express.",
+      "tags": [
+        "configuration"
+      ],
+      "confidence": 0.93
+    }
+  ],
+  "edges": [
+    {
+      "source": "route:GET /api/products",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:81"
+    },
+    {
+      "source": "route:GET /api/categories",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:88"
+    },
+    {
+      "source": "route:GET /api/settings/public",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:93"
+    },
+    {
+      "source": "route:GET /api/delivery/areas",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:108"
+    },
+    {
+      "source": "route:POST /api/orders",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:114"
+    },
+    {
+      "source": "route:POST /api/payments/verify",
+      "target": "file:server/payments.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:166"
+    },
+    {
+      "source": "route:POST /api/payments/webhook",
+      "target": "file:server/payments.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:193"
+    },
+    {
+      "source": "route:GET /api/orders",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:215"
+    },
+    {
+      "source": "route:GET /api/orders/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:222"
+    },
+    {
+      "source": "route:POST /api/orders/:id/queries",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:236"
+    },
+    {
+      "source": "route:GET /api/orders/:id/queries",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:256"
+    },
+    {
+      "source": "route:POST /api/custom-requests",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:268"
+    },
+    {
+      "source": "route:POST /api/auth/register",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:291"
+    },
+    {
+      "source": "route:POST /api/auth/admin-register",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:305"
+    },
+    {
+      "source": "route:POST /api/auth/login",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:323"
+    },
+    {
+      "source": "route:POST /api/auth/google",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:340"
+    },
+    {
+      "source": "route:GET /api/auth/config",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:369"
+    },
+    {
+      "source": "route:POST /api/auth/forgot-password",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:374"
+    },
+    {
+      "source": "route:POST /api/auth/reset-password",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:383"
+    },
+    {
+      "source": "route:GET /api/auth/me",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:396"
+    },
+    {
+      "source": "route:POST /api/admin/login",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:408"
+    },
+    {
+      "source": "route:GET /api/admin/me",
+      "target": "file:server/auth.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:424"
+    },
+    {
+      "source": "route:GET /api/admin/orders",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:437"
+    },
+    {
+      "source": "route:GET /api/admin/orders/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:442"
+    },
+    {
+      "source": "route:PATCH /api/admin/orders/:id/status",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:450"
+    },
+    {
+      "source": "route:PATCH /api/admin/orders/:id/location",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:463"
+    },
+    {
+      "source": "route:PATCH /api/admin/orders/:id/estimated-date",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:475"
+    },
+    {
+      "source": "route:GET /api/admin/custom-requests",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:503"
+    },
+    {
+      "source": "route:GET /api/admin/custom-requests/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:508"
+    },
+    {
+      "source": "route:PATCH /api/admin/custom-requests/:id/status",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:516"
+    },
+    {
+      "source": "route:PATCH /api/admin/settings",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:530"
+    },
+    {
+      "source": "route:GET /api/admin/products",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:538"
+    },
+    {
+      "source": "route:GET /api/admin/products/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:575"
+    },
+    {
+      "source": "route:POST /api/admin/products",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:583"
+    },
+    {
+      "source": "route:PATCH /api/admin/products/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:597"
+    },
+    {
+      "source": "route:DELETE /api/admin/products/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:610"
+    },
+    {
+      "source": "route:GET /api/admin/categories",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:619"
+    },
+    {
+      "source": "route:POST /api/admin/categories",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:626"
+    },
+    {
+      "source": "route:PATCH /api/admin/categories/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:639"
+    },
+    {
+      "source": "route:DELETE /api/admin/categories/:id",
+      "target": "file:server/repository.js",
+      "type": "routes_to",
+      "confidence": 0.7,
+      "evidence": "server/index.js:652"
+    },
+    {
+      "source": "route:GET /",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1575"
+    },
+    {
+      "source": "route:GET /login",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1578"
+    },
+    {
+      "source": "route:GET /signup",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1579"
+    },
+    {
+      "source": "route:GET /forgot-password",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1580"
+    },
+    {
+      "source": "route:GET /reset-password",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1581"
+    },
+    {
+      "source": "route:GET /shop",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1584"
+    },
+    {
+      "source": "route:GET /category/:slug",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1585"
+    },
+    {
+      "source": "route:GET /occasion/:occasion",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1586"
+    },
+    {
+      "source": "route:GET /product/:slug",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1587"
+    },
+    {
+      "source": "route:GET /custom-request",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1588"
+    },
+    {
+      "source": "route:GET /cart",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1589"
+    },
+    {
+      "source": "route:GET /checkout",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1590"
+    },
+    {
+      "source": "route:GET /track-order",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1591"
+    },
+    {
+      "source": "route:GET /about",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1592"
+    },
+    {
+      "source": "route:GET /pages/:slug",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1593"
+    },
+    {
+      "source": "route:GET /account",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1596"
+    },
+    {
+      "source": "route:GET /account/requests/:id",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1597"
+    },
+    {
+      "source": "route:GET /admin",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1600"
+    },
+    {
+      "source": "route:GET *",
+      "target": "file:src/App.jsx",
+      "type": "renders",
+      "confidence": 0.85,
+      "evidence": "src/App.jsx:1603"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:site_settings",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:1"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:products",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:20"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:delivery_areas",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:47"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:delivery_slots",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:57"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:orders",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:66"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:order_items",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:94"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:custom_requests",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:107"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:notification_logs",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:129"
+    },
+    {
+      "source": "file:server/migrations/001_initial.sql",
+      "target": "table:audit_logs",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/001_initial.sql:140"
+    },
+    {
+      "source": "file:server/migrations/002_users_categories_resets.sql",
+      "target": "table:users",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/002_users_categories_resets.sql:1"
+    },
+    {
+      "source": "file:server/migrations/002_users_categories_resets.sql",
+      "target": "table:password_reset_tokens",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/002_users_categories_resets.sql:17"
+    },
+    {
+      "source": "file:server/migrations/002_users_categories_resets.sql",
+      "target": "table:categories",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/002_users_categories_resets.sql:29"
+    },
+    {
+      "source": "file:server/migrations/004_admin_role_order_queries.sql",
+      "target": "table:order_queries",
+      "type": "writes",
+      "confidence": 0.94,
+      "evidence": "server/migrations/004_admin_role_order_queries.sql:4"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:@vitejs/plugin-react",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:autoprefixer",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:bcryptjs",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:cors",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:dotenv",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:express",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:framer-motion",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:helmet",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:jsonwebtoken",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:lucide-react",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:mysql2",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:nodemailer",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:postcss",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:razorpay",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:react-dom",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:tailwindcss",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:vite",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:package.json",
+      "target": "dep:zod",
+      "type": "depends_on",
+      "confidence": 0.99,
+      "evidence": "package.json:10"
+    },
+    {
+      "source": "file:server/auth.js",
+      "target": "dep:bcryptjs",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/auth.js:1"
+    },
+    {
+      "source": "file:server/auth.js",
+      "target": "dep:jsonwebtoken",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/auth.js:3"
+    },
+    {
+      "source": "file:server/auth.js",
+      "target": "dep:nodemailer",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/auth.js:4"
+    },
+    {
+      "source": "file:server/catalog.js",
+      "target": "file:src/mockData.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/catalog.js:1"
+    },
+    {
+      "source": "file:server/db.js",
+      "target": "dep:mysql2",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/db.js:1"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "dep:express",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/index.js:6"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "dep:cors",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/index.js:7"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "dep:helmet",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/index.js:8"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "dep:zod",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/index.js:9"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/catalog.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:10"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/repository.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:11"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/pricing.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:12"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/notifications.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:13"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/auth.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:14"
+    },
+    {
+      "source": "file:server/index.js",
+      "target": "file:server/payments.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/index.js:20"
+    },
+    {
+      "source": "file:server/migrate.js",
+      "target": "dep:mysql2",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/migrate.js:6"
+    },
+    {
+      "source": "file:server/notifications.js",
+      "target": "dep:nodemailer",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/notifications.js:1"
+    },
+    {
+      "source": "file:server/payments.js",
+      "target": "dep:razorpay",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/payments.js:1"
+    },
+    {
+      "source": "file:server/pricing.js",
+      "target": "dep:zod",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/pricing.js:1"
+    },
+    {
+      "source": "file:server/repository.js",
+      "target": "dep:bcryptjs",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "server/repository.js:1"
+    },
+    {
+      "source": "file:server/repository.js",
+      "target": "file:server/catalog.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/repository.js:3"
+    },
+    {
+      "source": "file:server/repository.js",
+      "target": "file:server/db.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/repository.js:4"
+    },
+    {
+      "source": "file:server/seed.js",
+      "target": "file:server/catalog.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/seed.js:1"
+    },
+    {
+      "source": "file:server/seed.js",
+      "target": "file:server/db.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "server/seed.js:3"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "dep:framer-motion",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/App.jsx:1"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "dep:lucide-react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/App.jsx:2"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/App.jsx:10"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/App.jsx:11"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "file:src/mockData.js",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/App.jsx:12"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "file:src/context/AuthContext.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/App.jsx:17"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "file:src/components/ProtectedRoute.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/App.jsx:18"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "file:src/pages/AuthPage.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/App.jsx:19"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "file:src/pages/ResetPasswordPage.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/App.jsx:20"
+    },
+    {
+      "source": "file:src/App.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/App.jsx:21"
+    },
+    {
+      "source": "file:src/components/ProtectedRoute.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/components/ProtectedRoute.jsx:1"
+    },
+    {
+      "source": "file:src/components/ProtectedRoute.jsx",
+      "target": "file:src/context/AuthContext.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/components/ProtectedRoute.jsx:2"
+    },
+    {
+      "source": "file:src/context/AuthContext.jsx",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/context/AuthContext.jsx:1"
+    },
+    {
+      "source": "file:src/main.jsx",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/main.jsx:1"
+    },
+    {
+      "source": "file:src/main.jsx",
+      "target": "dep:react-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/main.jsx:2"
+    },
+    {
+      "source": "file:src/main.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/main.jsx:3"
+    },
+    {
+      "source": "file:src/main.jsx",
+      "target": "file:src/App.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/main.jsx:4"
+    },
+    {
+      "source": "file:src/main.jsx",
+      "target": "file:src/styles.css",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/main.jsx:5"
+    },
+    {
+      "source": "file:src/pages/AuthPage.jsx",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/AuthPage.jsx:1"
+    },
+    {
+      "source": "file:src/pages/AuthPage.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/AuthPage.jsx:2"
+    },
+    {
+      "source": "file:src/pages/AuthPage.jsx",
+      "target": "dep:lucide-react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/AuthPage.jsx:3"
+    },
+    {
+      "source": "file:src/pages/AuthPage.jsx",
+      "target": "dep:framer-motion",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/AuthPage.jsx:4"
+    },
+    {
+      "source": "file:src/pages/AuthPage.jsx",
+      "target": "file:src/context/AuthContext.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/pages/AuthPage.jsx:5"
+    },
+    {
+      "source": "file:src/pages/ResetPasswordPage.jsx",
+      "target": "dep:react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/ResetPasswordPage.jsx:1"
+    },
+    {
+      "source": "file:src/pages/ResetPasswordPage.jsx",
+      "target": "dep:react-router-dom",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/ResetPasswordPage.jsx:2"
+    },
+    {
+      "source": "file:src/pages/ResetPasswordPage.jsx",
+      "target": "dep:lucide-react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/ResetPasswordPage.jsx:3"
+    },
+    {
+      "source": "file:src/pages/ResetPasswordPage.jsx",
+      "target": "dep:framer-motion",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "src/pages/ResetPasswordPage.jsx:4"
+    },
+    {
+      "source": "file:src/pages/ResetPasswordPage.jsx",
+      "target": "file:src/context/AuthContext.jsx",
+      "type": "imports",
+      "confidence": 0.97,
+      "evidence": "src/pages/ResetPasswordPage.jsx:5"
+    },
+    {
+      "source": "file:vite.config.js",
+      "target": "dep:vite",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "vite.config.js:1"
+    },
+    {
+      "source": "file:vite.config.js",
+      "target": "dep:@vitejs/plugin-react",
+      "type": "depends_on",
+      "confidence": 0.94,
+      "evidence": "vite.config.js:2"
+    },
+    {
+      "source": "config:vite.config.js",
+      "target": "file:server/index.js",
+      "type": "configures",
+      "confidence": 0.9,
+      "evidence": "vite.config.js:5"
+    }
+  ],
+  "hotspots": [
+    {
+      "file": "src/App.jsx",
+      "lines_of_code": 1506,
+      "reason": "High UI/routing concentration."
+    },
+    {
+      "file": "server/repository.js",
+      "lines_of_code": 648,
+      "reason": "Broad dual-persistence responsibility."
+    },
+    {
+      "file": "server/index.js",
+      "lines_of_code": 633,
+      "reason": "Central route/integration orchestration."
+    },
+    {
+      "file": "src/styles.css",
+      "lines_of_code": 490,
+      "reason": "Large module; changes may span concerns."
+    },
+    {
+      "file": "src/pages/AuthPage.jsx",
+      "lines_of_code": 332,
+      "reason": "Large module; changes may span concerns."
+    },
+    {
+      "file": "server/auth.js",
+      "lines_of_code": 274,
+      "reason": "Large module; changes may span concerns."
+    }
+  ],
+  "conventions": [
+    "Frontend follows src/pages, src/context, and src/components, but most storefront/admin implementation is concentrated in src/App.jsx.",
+    "Backend uses ESM and named exports; API routes are declared directly in server/index.js.",
+    "Async route handlers generally forward errors to Express next(error).",
+    "Zod in server/pricing.js validates checkout/custom request payloads; keep pricing authoritative on the server.",
+    "Shared mock catalogue also feeds backend seeding; do not treat it as durable order/customer state.",
+    "Add numbered SQL migrations under server/migrations; repository behavior should be implemented in both memory and MySQL variants.",
+    "No test, lint, formatter, or typecheck scripts/files were found.",
+    "Migration runner logs and continues after individual statement errors; inspect schema/logs.",
+    "DB fallback is in-memory and per operation; data may be non-durable or split when MySQL returns.",
+    "Planning/TODO documents include earlier or aspirational scope; runtime source/scripts are authoritative.",
+    "No inheritance or obvious direct circular imports found by static import-path heuristic; dead exports and indirect cycles are not proven."
+  ],
+  "change_guides": [
+    {
+      "change": "Add a route/endpoint",
+      "steps": [
+        "Add Express handler in server/index.js and appropriate JWT middleware.",
+        "Validate with Zod in server/pricing.js; persist through repository.js.",
+        "For UI route, wire App.jsx and public/manus-routes.json when applicable."
+      ]
+    },
+    {
+      "change": "Add a component/page",
+      "steps": [
+        "Add reusable component under src/components or screen under src/pages (or App.jsx following current pattern).",
+        "Wire React Router in src/App.jsx; reuse contexts and CSS design tokens.",
+        "Check responsive and reduced-motion behavior."
+      ]
+    },
+    {
+      "change": "Add a database model/migration",
+      "steps": [
+        "Create next numbered additive SQL migration.",
+        "Update memoryRepository and mysqlRepository in server/repository.js.",
+        "Update seed/catalog if needed; run npm run db:migrate then npm run db:seed."
+      ]
+    },
+    {
+      "change": "Add a service/module",
+      "steps": [
+        "Create ESM module under server with explicit configuration checks.",
+        "Wire through server/index.js or owning domain module; propagate errors.",
+        "Document variable names, never secret values."
+      ]
+    },
+    {
+      "change": "Add a test",
+      "steps": [
+        "No runner is configured; add a test framework and npm test script first.",
+        "Prioritize pricing/schema, auth guards, and repository behavior."
+      ]
+    },
+    {
+      "change": "Update configuration",
+      "steps": [
+        "Edit package.json or relevant Vite/Tailwind/PostCSS/Docker config.",
+        "Never commit .env or key material; document exact operational effects."
+      ]
+    }
+  ]
+}

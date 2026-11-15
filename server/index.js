@@ -200,6 +200,7 @@ app.get('/api/reviews', async (request, response, next) => {
 });
 
 app.post('/api/reviews', requireUserJWT, async (request, response, next) => {
+  let uploadedImageUrl = '';
   try {
     const productId = String(request.body?.productId || '').trim().slice(0, 80);
     const rating = Number(request.body?.rating);
@@ -207,15 +208,32 @@ app.post('/api/reviews', requireUserJWT, async (request, response, next) => {
     if (!productId || !Number.isInteger(rating) || rating < 1 || rating > 5 || comment.length < 3 || comment.length > 1200) {
       return response.status(400).json({ error: 'INVALID_REVIEW', message: 'Choose 1–5 stars and write a comment between 3 and 1,200 characters.' });
     }
+    const imageData = request.body?.imageData || '';
+    if (typeof imageData !== 'string' || imageData.length > 7_100_000) {
+      return response.status(400).json({ error: 'INVALID_REVIEW_IMAGE', message: 'Choose one review image up to 5 MB.' });
+    }
+    let imageBytes = null;
+    if (imageData) {
+      const imageMatch = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(imageData);
+      if (!imageMatch) return response.status(400).json({ error: 'INVALID_REVIEW_IMAGE', message: 'Use a JPG, PNG, WebP, or GIF image.' });
+      imageBytes = Buffer.from(imageMatch[2], 'base64');
+      if (!imageBytes.length || imageBytes.length > 5 * 1024 * 1024) {
+        return response.status(400).json({ error: 'INVALID_REVIEW_IMAGE', message: 'Choose one review image up to 5 MB.' });
+      }
+    }
     const product = await repository.getProduct(productId);
     if (!product || product.isActive === false || product.is_active === 0) return response.status(404).json({ error: 'PRODUCT_NOT_FOUND', message: 'This product is no longer available for review.' });
+    if (imageData) uploadedImageUrl = await saveReferenceMedia(imageData, `review-${productId}`);
     const review = await repository.createReview({
       id: newEntityId('REV'), productId, userId: request.user.sub,
       customerName: String(request.user.name || request.user.email?.split('@')[0] || 'Customer').trim().slice(0, 120), rating, comment,
+      imageUrl: uploadedImageUrl || null,
     });
     return response.status(201).json({ review, message: 'Thanks! Your review is waiting for studio approval.' });
   } catch (error) {
+    if (uploadedImageUrl) await removeReferenceMedia([uploadedImageUrl]).catch(() => {});
     if (error.code === 'ER_DUP_ENTRY') return response.status(409).json({ error: 'REVIEW_EXISTS', message: 'You have already reviewed this product.' });
+    if (error.status) return response.status(error.status).json({ error: 'REVIEW_IMAGE_ERROR', message: error.message || 'Could not upload the review image.' });
     return next(error);
   }
 });
@@ -297,6 +315,16 @@ app.post('/api/orders/:id/payment-report', requireUserJWT, async (request, respo
   } catch (error) { return next(error); }
 });
 
+app.delete('/api/orders/:id', requireUserJWT, async (request, response, next) => {
+  try {
+    const result = await repository.cancelOrder(request.params.id, request.user.sub);
+    if (result.error === 'ORDER_NOT_FOUND') return response.status(404).json({ error: result.error, message: 'Order was not found for this account.' });
+    if (result.error === 'FORBIDDEN') return response.status(403).json({ error: result.error, message: 'This order does not belong to your account.' });
+    if (result.error === 'CANCELLATION_CLOSED') return response.status(409).json({ error: result.error, message: 'The studio has closed cancellation for this order. Please message the studio for help.' });
+    return response.json({ cancelled: true, message: 'Order and its related data have been permanently deleted.' });
+  } catch (error) { return next(error); }
+});
+
 // ── Razorpay webhook ───────────────────────────────────────────────────
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), async (request, response, next) => {
   try {
@@ -340,6 +368,11 @@ app.get('/api/orders/:id', requireUserJWT, async (request, response, next) => {
   } catch (error) { return next(error); }
 });
 
+function isOrderChatClosedForCustomer(order) {
+  return String(order?.status || '').toUpperCase() === 'DELIVERED'
+    && String(order?.paymentStatus || order?.payment_status || '').toUpperCase() === 'PAID';
+}
+
 // ── Order Queries (user side) ──────────────────────────────────────────
 app.post('/api/orders/:id/queries', requireUserJWT, async (request, response, next) => {
   try {
@@ -347,6 +380,9 @@ app.post('/api/orders/:id/queries', requireUserJWT, async (request, response, ne
     if (!order) return response.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'We could not find that order.' });
     if ((order.userId || order.user_id) && (order.userId || order.user_id) !== request.user.sub) {
       return response.status(403).json({ error: 'FORBIDDEN', message: 'This order does not belong to you.' });
+    }
+    if (isOrderChatClosedForCustomer(order)) {
+      return response.status(409).json({ error: 'CHAT_CLOSED', message: 'This order is fully paid and delivered. Its conversation is closed.' });
     }
     const { message } = request.body || {};
     if (!message || !String(message).trim()) {
@@ -388,6 +424,9 @@ app.route('/api/conversations/:type/:id')
       const entity = type === 'order' ? await repository.getOrder(id) : type === 'request' ? await repository.getCustomRequest(id) : null;
       if (!entity) return response.status(404).json({ error: 'CONVERSATION_NOT_FOUND' });
       if ((entity.userId || entity.user_id) !== request.user.sub) return response.status(403).json({ error: 'FORBIDDEN' });
+      if (type === 'order' && isOrderChatClosedForCustomer(entity)) {
+        return response.status(409).json({ error: 'CHAT_CLOSED', message: 'This order is fully paid and delivered. Its conversation is closed.' });
+      }
       const message = String(request.body?.message || '').trim();
       if (!message || message.length > 3000) return response.status(400).json({ error: 'INVALID_MESSAGE', message: 'Write a message up to 3,000 characters.' });
       const saved = await repository.addConversationMessage({ type: type.toUpperCase(), entityId: id, userId: request.user.sub, senderRole: 'CUSTOMER', message });
@@ -445,11 +484,22 @@ app.post('/api/custom-requests', requireUserJWT, async (request, response, next)
   try {
     const input = customRequestSchema.parse(request.body);
     const product = input.productId ? await repository.getProduct(input.productId) : null;
-    const uploadedUrls = await Promise.all(input.referenceFiles.map((file) => saveReferenceMedia(file.data, file.name)));
+    const uploadedUrls = [];
     const { referenceFiles, ...requestInput } = input;
-    const requestRecord = { ...requestInput, referenceUrls: [...input.referenceUrls, ...uploadedUrls], userId: request.user.sub, id: newEntityId('CR'), productName: product?.name || '', status: 'NEW' };
-    const saved = await repository.createCustomRequest(requestRecord);
-    await repository.addConversationMessage({ type: 'REQUEST', entityId: saved.id, userId: request.user.sub, senderRole: 'CUSTOMER', message: saved.description });
+    let saved;
+    try {
+      for (const file of referenceFiles) uploadedUrls.push(await saveReferenceMedia(file.data, file.name));
+      const requestRecord = { ...requestInput, referenceUrls: [...input.referenceUrls, ...uploadedUrls], userId: request.user.sub, id: newEntityId('CR'), productName: product?.name || '', status: 'NEW' };
+      saved = await repository.createCustomRequest(requestRecord);
+    } catch (error) {
+      await removeReferenceMedia(uploadedUrls);
+      throw error;
+    }
+    try {
+      await repository.addConversationMessage({ type: 'REQUEST', entityId: saved.id, userId: request.user.sub, senderRole: 'CUSTOMER', message: saved.description });
+    } catch (error) {
+      console.error('[custom-request-chat-error]', error.message);
+    }
 
     try {
       await notifyNewCustomRequest(saved);
@@ -460,7 +510,11 @@ app.post('/api/custom-requests', requireUserJWT, async (request, response, next)
     } catch { /* silent */ }
 
     return response.status(201).json({ request: saved, message: 'Request received. We will review the idea and send a manual quote.' });
-  } catch (error) { return next(error); }
+  } catch (error) {
+    if (error instanceof ZodError) return next(error);
+    if (Number(error.status) >= 400) return response.status(error.status).json({ error: 'CUSTOM_REQUEST_ERROR', message: error.message });
+    return next(error);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -683,6 +737,17 @@ app.get('/api/admin/orders/:id', requireAdminJWT, async (request, response, next
   } catch (error) { return next(error); }
 });
 
+app.patch('/api/admin/orders/:id/cancellation', requireAdminJWT, async (request, response, next) => {
+  try {
+    if (typeof request.body?.allowed !== 'boolean') {
+      return response.status(400).json({ error: 'INVALID_CANCELLATION_SETTING', message: 'allowed must be true or false.' });
+    }
+    const order = await repository.setOrderCancellationAllowed(request.params.id, request.body.allowed);
+    if (!order) return response.status(404).json({ error: 'ORDER_NOT_FOUND' });
+    return response.json({ order });
+  } catch (error) { return next(error); }
+});
+
 app.patch('/api/admin/orders/:id/status', requireAdminJWT, async (request, response, next) => {
   try {
     const { status } = request.body;
@@ -882,8 +947,10 @@ app.patch('/api/admin/reviews/:id', requireAdminJWT, async (request, response, n
 
 app.delete('/api/admin/reviews/:id', requireAdminJWT, async (request, response, next) => {
   try {
+    const review = (await repository.listReviews()).find((item) => item.id === request.params.id);
     const ok = await repository.deleteReview(request.params.id);
     if (!ok) return response.status(404).json({ error: 'REVIEW_NOT_FOUND' });
+    if (review?.imageUrl) await removeReferenceMedia([review.imageUrl]).catch(() => {});
     return response.json({ ok: true });
   } catch (error) { return next(error); }
 });

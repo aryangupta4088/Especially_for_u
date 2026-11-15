@@ -34,6 +34,7 @@ export const deliverySlots = [
 
 export const storeSettings = {
   storeStatus: 'OPEN', acceptingCustomRequests: true,
+  homepageImages: {},
   pauseMessage: 'Taking a short break for exams, back on 20 Nov.',
   announcementBar: { text: 'Muradnagar-made, KIET-campus ready · custom requests open', link: '/custom-request', isActive: true },
   timezone: 'Asia/Kolkata', minNoticeHours: 24, orderCutoffTime: '20:00',

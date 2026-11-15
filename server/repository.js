@@ -111,14 +111,41 @@ function memoryRepository() {
     async getPublicSettings() { return { ...clone(catalogStoreSettings), upiId: catalogStoreSettings.upiId || process.env.UPI_ID || '', upiQrImage: catalogStoreSettings.upiQrImage || process.env.UPI_QR_IMAGE_URL || '', paymentInstructions: catalogStoreSettings.paymentInstructions || 'Pay the requested amount by UPI. We will start after confirming it.' }; },
     async listDeliveryAreas() { return catalogDeliveryAreas.map((label, index) => ({ id: String(index + 1), label, areaType: index === 0 ? 'CAMPUS' : label.startsWith('Other') ? 'MANUAL' : 'LOCAL', fee: index === 0 ? 0 : 50, approvalRequired: label.startsWith('Other'), isActive: true })); },
     async listDeliverySlots() { return clone(catalogDeliverySlots); },
-    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, userId: order.userId || null, total: Number(order.pricing?.total || 0), paidAmount: 0, balanceDue: Number(order.pricing?.total || 0), paymentStatus: 'PENDING', estimatedDate: null, pickupDate: order.delivery?.pickupDate || null, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
+    async createOrder(order) { const saved = { ...clone(order), id: order.id || `EFU-${1043 + memory.orders.length}`, userId: order.userId || null, total: Number(order.pricing?.total || 0), paidAmount: 0, balanceDue: Number(order.pricing?.total || 0), paymentStatus: 'PENDING', cancellationAllowed: true, estimatedDate: null, pickupDate: order.delivery?.pickupDate || null, createdAt: new Date().toISOString() }; memory.orders.unshift(saved); return saved; },
     async getOrder(id) { return memory.orders.find((order) => order.id === id) || null; },
+    async setOrderCancellationAllowed(id, allowed) {
+      const order = memory.orders.find((item) => item.id === id);
+      if (!order) return null;
+      order.cancellationAllowed = allowed;
+      return clone(order);
+    },
+    async cancelOrder(id, userId) {
+      const index = memory.orders.findIndex((item) => item.id === id);
+      if (index < 0) return { error: 'ORDER_NOT_FOUND' };
+      const order = memory.orders[index];
+      if (String(order.userId || order.user_id || '') !== String(userId)) return { error: 'FORBIDDEN' };
+      if (order.cancellationAllowed === false || order.cancellation_allowed === 0) return { error: 'CANCELLATION_CLOSED' };
+      const queryIds = (memory.orderQueries || []).filter((query) => query.orderId === id).map((query) => String(query.id));
+      memory.orders.splice(index, 1);
+      memory.orderQueries = (memory.orderQueries || []).filter((query) => query.orderId !== id);
+      memory.conversationMessages = (memory.conversationMessages || []).filter((message) => !(message.conversationType === 'ORDER' && message.entityId === id));
+      memory.auditLogs = (memory.auditLogs || []).filter((entry) => !(
+        (entry.entity === 'order' && String(entry.entityId) === id)
+        || (entry.entity === 'order_query' && queryIds.includes(String(entry.entityId)))
+      ));
+      return { ok: true };
+    },
     async getOrderWithItems(id) {
       const order = memory.orders.find((o) => o.id === id);
       if (!order) return null;
       return clone({ ...order, items: order.pricing?.lineItems || [] });
     },
-    async listOrders() { return clone(memory.orders); },
+    async listOrders() {
+      return clone(memory.orders.map((order) => ({
+        ...order,
+        productNames: (order.pricing?.lineItems || []).map((item) => item.productName).filter(Boolean).join(', '),
+      })));
+    },
     async updateOrderStatus(id, status, actor) {
       const order = memory.orders.find((o) => o.id === id);
       if (!order) return null;
@@ -268,7 +295,14 @@ function memoryRepository() {
       memory.auditLogs.unshift({ actor, action: 'REPLY_QUERY', entity: 'order_query', entityId: String(id), diff: { reply }, createdAt: new Date().toISOString() });
       return clone(q);
     },
-    async listOrdersByUser(userId) { return clone(memory.orders.filter((o) => o.userId === userId || o.user_id === userId)); },
+    async listOrdersByUser(userId) {
+      return clone(memory.orders
+        .filter((order) => order.userId === userId || order.user_id === userId)
+        .map((order) => ({
+          ...order,
+          productNames: (order.pricing?.lineItems || []).map((item) => item.productName).filter(Boolean).join(', '),
+        })));
+    },
     async addConversationMessage({ type, entityId, userId, senderRole, message }) {
       memory.conversationMessages ||= [];
       const saved = { id: randomUUID(), conversationType: type, entityId, userId, senderRole, message, createdAt: new Date().toISOString() };
@@ -314,12 +348,12 @@ function mysqlRepository(pool) {
       const where = []; const params = [];
       if (productId) { where.push('r.product_id = ?'); params.push(productId); }
       if (status) { where.push('r.status = ?'); params.push(status); }
-      const [rows] = await pool.query(`SELECT r.id, r.product_id AS productId, r.user_id AS userId, r.customer_name AS customerName, r.rating, r.comment, r.status, r.created_at AS createdAt, p.name AS productName, p.slug AS productSlug, p.image AS productImage FROM product_reviews r LEFT JOIN products p ON p.id = r.product_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY r.created_at DESC LIMIT 500`, params);
+      const [rows] = await pool.query(`SELECT r.id, r.product_id AS productId, r.user_id AS userId, r.customer_name AS customerName, r.rating, r.comment, r.image_url AS imageUrl, r.status, r.created_at AS createdAt, p.name AS productName, p.slug AS productSlug, p.image AS productImage FROM product_reviews r LEFT JOIN products p ON p.id = r.product_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY r.created_at DESC LIMIT 500`, params);
       return rows;
     },
     async createReview(review) {
       const id = review.id || newEntityId('REV');
-      await pool.query('INSERT INTO product_reviews (id,product_id,user_id,customer_name,rating,comment,status) VALUES (?,?,?,?,?,?,?)', [id, review.productId, review.userId, review.customerName, review.rating, review.comment, 'PENDING']);
+      await pool.query('INSERT INTO product_reviews (id,product_id,user_id,customer_name,rating,comment,image_url,status) VALUES (?,?,?,?,?,?,?,?)', [id, review.productId, review.userId, review.customerName, review.rating, review.comment, review.imageUrl || null, 'PENDING']);
       const rows = await this.listReviews({ productId: review.productId });
       return rows.find((item) => item.id === id) || null;
     },
@@ -531,7 +565,7 @@ function mysqlRepository(pool) {
       await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
       return this.getUserById(userId);
     },
-    async getPublicSettings() { const [rows] = await pool.query('SELECT * FROM site_settings WHERE id = 1 LIMIT 1'); return rows[0] ? { ...catalogStoreSettings, storeStatus: rows[0].store_status, acceptingCustomRequests: Boolean(rows[0].accepting_custom_requests), pauseMessage: rows[0].pause_message, timezone: rows[0].timezone, orderCutoffTime: rows[0].order_cutoff_time, dailyOrderCapacity: rows[0].daily_order_capacity, dailyCustomCapacity: rows[0].daily_custom_capacity, maxActiveProductionOrders: rows[0].max_active_production_orders, giftWrapPrice: rows[0].gift_wrap_price, testMode: Boolean(rows[0].test_mode), upiId: rows[0].upi_id || '', upiQrImage: rows[0].upi_qr_image || '', paymentInstructions: rows[0].payment_instructions || 'Pay the requested amount by UPI. We will start after confirming it.', announcementBar: { text: rows[0].announcement_text, link: rows[0].announcement_link, isActive: true } } : clone(catalogStoreSettings); },
+    async getPublicSettings() { const [rows] = await pool.query('SELECT * FROM site_settings WHERE id = 1 LIMIT 1'); return rows[0] ? { ...catalogStoreSettings, storeStatus: rows[0].store_status, acceptingCustomRequests: Boolean(rows[0].accepting_custom_requests), pauseMessage: rows[0].pause_message, timezone: rows[0].timezone, orderCutoffTime: rows[0].order_cutoff_time, dailyOrderCapacity: rows[0].daily_order_capacity, dailyCustomCapacity: rows[0].daily_custom_capacity, maxActiveProductionOrders: rows[0].max_active_production_orders, giftWrapPrice: rows[0].gift_wrap_price, testMode: Boolean(rows[0].test_mode), upiId: rows[0].upi_id || '', upiQrImage: rows[0].upi_qr_image || '', homepageImages: parseJson(rows[0].homepage_images_json, {}), paymentInstructions: rows[0].payment_instructions || 'Pay the requested amount by UPI. We will start after confirming it.', announcementBar: { text: rows[0].announcement_text, link: rows[0].announcement_link, isActive: true } } : clone(catalogStoreSettings); },
     async listDeliveryAreas() { const [rows] = await pool.query('SELECT id, label, area_type AS areaType, fee, approval_required AS approvalRequired, is_active AS isActive FROM delivery_areas WHERE is_active = 1 ORDER BY id'); return rows; },
     async listDeliverySlots() { const [rows] = await pool.query('SELECT id, label, area, days, remaining FROM delivery_slots WHERE is_active = 1 ORDER BY id'); return rows; },
 
@@ -551,17 +585,17 @@ function mysqlRepository(pool) {
           );
         }
         await connection.commit();
-        return order;
+        return { ...order, cancellationAllowed: true };
       } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
     },
 
     async getOrder(id) {
-      const [rows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate FROM orders WHERE id = ? LIMIT 1', [id]);
+      const [rows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate, cancellation_allowed AS cancellationAllowed FROM orders WHERE id = ? LIMIT 1', [id]);
       return rows[0] || null;
     },
 
     async getOrderWithItems(id) {
-      const [orderRows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate FROM orders WHERE id = ? LIMIT 1', [id]);
+      const [orderRows] = await pool.query('SELECT *, user_id AS userId, estimated_date AS estimatedDate, pickup_date AS pickupDate, cancellation_allowed AS cancellationAllowed FROM orders WHERE id = ? LIMIT 1', [id]);
       if (!orderRows[0]) return null;
       const [itemRows] = await pool.query('SELECT * FROM order_items WHERE order_id = ? ORDER BY id', [id]);
       const order = orderRows[0];
@@ -583,13 +617,54 @@ function mysqlRepository(pool) {
     },
 
     async listOrders() {
-      const [rows] = await pool.query('SELECT id, user_id AS userId, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, customer_name AS customer, customer_email AS email, customer_phone AS phone, total, paid_amount AS paidAmount, reported_amount AS reportedAmount, reported_reference AS reportedReference, payment_status AS paymentStatus, payment_plan AS paymentPlan, delivery_area AS deliveryArea, delivery_method AS deliveryMethod, location_approval AS locationApproval, advance_due AS advanceDue, balance_due AS balanceDue, created_at AS createdAt FROM orders ORDER BY created_at DESC LIMIT 100');
+      const [rows] = await pool.query("SELECT id, user_id AS userId, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, customer_name AS customer, customer_email AS email, customer_phone AS phone, total, paid_amount AS paidAmount, reported_amount AS reportedAmount, reported_reference AS reportedReference, payment_status AS paymentStatus, payment_plan AS paymentPlan, delivery_area AS deliveryArea, delivery_method AS deliveryMethod, location_approval AS locationApproval, advance_due AS advanceDue, balance_due AS balanceDue, cancellation_allowed AS cancellationAllowed, (SELECT GROUP_CONCAT(oi.product_name ORDER BY oi.id SEPARATOR ', ') FROM order_items oi WHERE oi.order_id = orders.id) AS productNames, created_at AS createdAt FROM orders ORDER BY created_at DESC LIMIT 100");
       return rows;
     },
 
     async listOrdersByUser(userId) {
-      const [rows] = await pool.query('SELECT id, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, total, paid_amount AS paidAmount, balance_due AS balanceDue, payment_status AS paymentStatus, delivery_area AS deliveryArea, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
+      const [rows] = await pool.query("SELECT id, status, estimated_date AS estimatedDate, pickup_date AS pickupDate, total, paid_amount AS paidAmount, balance_due AS balanceDue, payment_status AS paymentStatus, delivery_area AS deliveryArea, cancellation_allowed AS cancellationAllowed, (SELECT GROUP_CONCAT(oi.product_name ORDER BY oi.id SEPARATOR ', ') FROM order_items oi WHERE oi.order_id = orders.id) AS productNames, created_at AS createdAt FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 100", [userId]);
       return rows;
+    },
+
+    async setOrderCancellationAllowed(id, allowed) {
+      const [result] = await pool.query('UPDATE orders SET cancellation_allowed = ? WHERE id = ?', [allowed, id]);
+      if (!result.affectedRows) {
+        const existing = await this.getOrder(id);
+        if (!existing) return null;
+      }
+      return this.getOrder(id);
+    },
+
+    async cancelOrder(id, userId) {
+      const connection = await pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        const [[order]] = await connection.query(
+          'SELECT user_id, cancellation_allowed FROM orders WHERE id = ? FOR UPDATE',
+          [id]
+        );
+        if (!order) {
+          await connection.rollback();
+          return { error: 'ORDER_NOT_FOUND' };
+        }
+        if (String(order.user_id || '') !== String(userId)) {
+          await connection.rollback();
+          return { error: 'FORBIDDEN' };
+        }
+        if (!order.cancellation_allowed) {
+          await connection.rollback();
+          return { error: 'CANCELLATION_CLOSED' };
+        }
+        await connection.query(
+          "DELETE FROM audit_logs WHERE (entity = 'order' AND entity_id = ?) OR (entity = 'order_query' AND entity_id IN (SELECT CAST(id AS CHAR) FROM order_queries WHERE order_id = ?))",
+          [id, id]
+        );
+        await connection.query("DELETE FROM conversation_messages WHERE conversation_type = 'ORDER' AND entity_id = ?", [id]);
+        await connection.query('DELETE FROM orders WHERE id = ?', [id]);
+        await connection.commit();
+        return { ok: true };
+      } catch (error) { await connection.rollback(); throw error; }
+      finally { connection.release(); }
     },
 
     async updateOrderEstimatedDate(id, estimatedDate, actor) {
@@ -722,17 +797,28 @@ function mysqlRepository(pool) {
     },
 
     async updateSettings(updates) {
-      const fields = [];
+      const columns = [];
       const values = [];
       const allowed = ['store_status', 'accepting_custom_requests', 'pause_message', 'announcement_text', 'announcement_link', 'order_cutoff_time', 'daily_order_capacity', 'daily_custom_capacity', 'max_active_production_orders', 'gift_wrap_price', 'test_mode'];
-      const mapped = { upiId: 'upi_id', upiQrImage: 'upi_qr_image', paymentInstructions: 'payment_instructions' };
+      const mapped = { upiId: 'upi_id', upiQrImage: 'upi_qr_image', paymentInstructions: 'payment_instructions', homepageImages: 'homepage_images_json' };
       for (const [key, value] of Object.entries(updates)) {
         const column = mapped[key] || (allowed.includes(key) ? key : null);
-        if (column) { fields.push(`${column} = ?`); values.push(value); }
+        if (column && !columns.includes(column)) { columns.push(column); values.push(key === 'homepageImages' ? JSON.stringify(value || {}) : value); }
       }
-      if (fields.length > 0) {
-        values.push(1);
-        await pool.query(`UPDATE site_settings SET ${fields.join(', ')} WHERE id = ?`, values);
+      if (columns.length > 0) {
+        // Upsert the singleton row so settings persist even before it exists.
+        const pairs = columns.map((column, index) => [column, values[index]]);
+        for (const required of ['pause_message', 'announcement_text']) {
+          if (!columns.includes(required)) pairs.push([required, '']);
+        }
+        const cols = pairs.map(([column]) => column);
+        const vals = pairs.map(([, value]) => value);
+        const placeholders = cols.map(() => '?').join(', ');
+        const assignments = cols.map((column) => `${column} = VALUES(${column})`).join(', ');
+        await pool.query(
+          `INSERT INTO site_settings (id, ${cols.join(', ')}) VALUES (1, ${placeholders}) ON DUPLICATE KEY UPDATE ${assignments}`,
+          vals
+        );
       }
       return this.getPublicSettings();
     },

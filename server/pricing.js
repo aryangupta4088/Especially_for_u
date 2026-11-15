@@ -32,6 +32,10 @@ export const orderInputSchema = z.object({
   paymentPlan: z.string().trim().max(60).optional(),
 });
 
+const publicReferenceUrlSchema = z.string().max(2048).refine((value) => {
+  try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
+}, 'Enter a valid HTTP or HTTPS reference link');
+
 export const customRequestSchema = z.object({
   productId: z.string().trim().max(80).optional().default(''),
   title: z.string().trim().min(3).max(160),
@@ -43,7 +47,7 @@ export const customRequestSchema = z.object({
   description: z.string().trim().min(10).max(5000),
   neededBy: z.string().trim().max(40).optional().default(''),
   budget: z.string().trim().max(80).optional().default(''),
-  referenceUrls: z.array(z.string().url()).max(5).optional().default([]),
+  referenceUrls: z.array(publicReferenceUrlSchema).max(5).optional().default([]),
   referenceFiles: z.array(z.object({ name: z.string().max(180).optional(), data: z.string().max(12 * 1024 * 1024) })).max(5).optional().default([]),
   size: z.string().trim().max(120).optional().default(''),
   colours: z.string().trim().max(240).optional().default(''),
@@ -72,9 +76,10 @@ export function calculateOrder(input, catalog, storeSettings) {
   const subtotal = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
   const hasCustomItem = lineItems.some((item) => item.type === 'CUSTOM_FIXED' || item.type === 'CUSTOM_QUOTE');
   const isManualLocation = input.delivery.area === 'Other location in Muradnagar';
-  const deliveryFee = input.delivery.method === 'home' && subtotal < 1000 ? 50 : 0;
-  const giftWrapFee = input.gift.giftWrap ? Number(storeSettings.giftWrapPrice || 79) : 0;
-  const total = subtotal + deliveryFee + giftWrapFee;
+  // Only product charges apply: delivery and gift-wrap are free.
+  const deliveryFee = 0;
+  const giftWrapFee = 0;
+  const total = subtotal;
   const advanceDue = Math.ceil(total * 0.5);
   const balanceDue = Math.max(0, total - advanceDue);
   const paymentOptions = ['ADVANCE_50'];

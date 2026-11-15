@@ -72,8 +72,24 @@ function formatOrderHTML(order) {
   `;
 }
 
+function escapeEmailHTML(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
 // ── Format custom request as HTML ──────────────────────────────────────
 function formatCustomRequestHTML(request) {
+  const referenceLinks = (Array.isArray(request.referenceUrls) ? request.referenceUrls : [])
+    .filter((value) => {
+      try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
+    })
+    .map((url, index) => `<li style="margin:6px 0;"><a href="${escapeEmailHTML(url)}" style="color:#995f83;">Inspiration link ${index + 1}</a></li>`)
+    .join('');
   return `
     <div style="font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#FFFBFE;border-radius:16px;overflow:hidden;">
       <div style="background:linear-gradient(135deg,#E8C8D8 0%,#BDE0FE 100%);padding:32px 24px;text-align:center;">
@@ -92,6 +108,7 @@ function formatCustomRequestHTML(request) {
           ${request.neededBy ? `<tr><td style="color:#6B5B7B;padding:4px 0;">Needed By</td><td style="color:#3B2A4A;">${request.neededBy}</td></tr>` : ''}
           ${request.occasion ? `<tr><td style="color:#6B5B7B;padding:4px 0;">Occasion</td><td style="color:#3B2A4A;">${request.occasion}</td></tr>` : ''}
         </table>
+        ${referenceLinks ? `<div style="background:#f8f4fc;border-radius:12px;padding:16px;margin-bottom:16px;"><strong style="color:#6B5B7B;font-size:12px;">INSPIRATION LINKS</strong><ul style="margin:8px 0 0;padding-left:18px;">${referenceLinks}</ul></div>` : ''}
         <div style="background:#f8f4fc;border-radius:12px;padding:16px;">
           <strong style="color:#6B5B7B;font-size:12px;">DESCRIPTION</strong>
           <p style="color:#3B2A4A;margin:8px 0 0;line-height:1.6;">${request.description}</p>
@@ -204,11 +221,12 @@ export async function sendOrderConfirmation(order) {
 
   const customerEmail = order.customer?.email;
   if (!customerEmail) return { status: 'no-email' };
+  const productNames = (order.pricing?.lineItems || []).map((item) => item.productName).filter(Boolean).join(', ');
 
   try {
     const result = await sendGmail({
       to: customerEmail,
-      subject: `Your Especially For U order ${order.id} is confirmed! ✦`,
+      subject: `Your ${productNames || 'Especially For U'} order is confirmed · ${order.id}`,
       html: `
         <div style="font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#FFFBFE;border-radius:16px;overflow:hidden;">
           <div style="background:linear-gradient(135deg,#FFAFCC 0%,#BDE0FE 100%);padding:32px 24px;text-align:center;">
@@ -216,7 +234,7 @@ export async function sendOrderConfirmation(order) {
             <p style="margin:8px 0 0;color:#6B5B7B;font-size:14px;">Your order is being crafted with love</p>
           </div>
           <div style="padding:24px;">
-            <p style="color:#3B2A4A;line-height:1.6;">We've received your order <strong>${order.id}</strong> and we're getting started on it!</p>
+            <p style="color:#3B2A4A;line-height:1.6;">We've received your order for <strong>${productNames || 'your selected pieces'}</strong>. Your order ID is <strong>${order.id}</strong>, and we're getting started on it!</p>
             <div style="background:#f8f4fc;border-radius:12px;padding:16px;margin:16px 0;">
               <table style="width:100%;">
                 <tr><td style="color:#6B5B7B;">Order Total</td><td style="text-align:right;font-weight:700;color:#3B2A4A;">₹${order.pricing?.total || 0}</td></tr>

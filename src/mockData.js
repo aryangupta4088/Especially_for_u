@@ -138,7 +138,7 @@ export const sampleRequests = [
 export const howItWorks = [
   { number: '01', title: 'Pick or describe', text: 'Choose a ready-made piece or tell us the idea living in your head.', icon: 'sparkles' },
   { number: '02', title: 'Get a quote', text: 'For custom work, we review your brief and send a clear, friendly quote.', icon: 'message-circle' },
-  { number: '03', title: 'Pay securely', text: 'Pay online with Razorpay. Custom orders start with a simple advance.', icon: 'credit-card' },
+  { number: '03', title: 'Pay in two steps', text: 'Send a 50% UPI advance. We’ll verify it before we begin, then collect the balance at handover.', icon: 'credit-card' },
   { number: '04', title: 'We craft & deliver', text: 'Your piece is made slowly and delivered within Muradnagar.', icon: 'heart-handshake' },
 ];
 

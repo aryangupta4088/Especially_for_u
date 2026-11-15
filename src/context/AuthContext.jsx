@@ -116,9 +116,7 @@ export function AuthProvider({ children }) {
   const authenticated = Boolean(token && user);
   const isAdmin = useMemo(() => {
     const r = user?.role;
-    if (r === 'admin' || r === 'ADMIN' || r === 'OWNER' || r === 'Owner') return true;
-    if (localStorage.getItem('efu_admin_token')) return true;
-    return false;
+    return ['admin', 'ADMIN', 'OWNER', 'Owner'].includes(r);
   }, [user]);
   const value = useMemo(() => ({
     token,

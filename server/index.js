@@ -12,8 +12,8 @@ import { createRepository, newEntityId } from './repository.js';
 import { calculateOrder, customRequestSchema, orderInputSchema } from './pricing.js';
 import { notificationConfig, notifyNewOrder, notifyNewCustomRequest, sendOrderConfirmation } from './notifications.js';
 import {
-  authenticateAdmin, requireAdminJWT, authConfig,
-  registerUser, registerAdmin, authenticateUser, authenticateGoogle,
+  authenticateAdmin, requireAdminJWT, requireOwnerJWT, authConfig,
+  registerUser, createTeamAdmin, authenticateUser, authenticateGoogle,
   requireUserJWT, optionalUserJWT,
   generatePasswordResetToken, resetPasswordWithToken,
 } from './auth.js';
@@ -43,9 +43,9 @@ const port = Number(process.env.PORT || (process.env.NODE_ENV === 'production' ?
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '65mb' }));
 
-const UPLOAD_DIR = path.resolve(__dirname, '../public/uploads');
+const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.resolve(__dirname, '../public/uploads'));
 fs.mkdir(UPLOAD_DIR, { recursive: true }).catch(() => {});
 
 async function saveBase64Image(b64, filenameHint = 'upload') {
@@ -62,6 +62,29 @@ async function saveBase64Image(b64, filenameHint = 'upload') {
   const full = path.join(UPLOAD_DIR, filename);
   await fs.writeFile(full, Buffer.from(data, 'base64'));
   return `/uploads/${filename}`;
+}
+
+async function saveReferenceMedia(dataUrl, filenameHint = 'reference') {
+  const match = /^data:(image\/[a-z0-9+.-]+|video\/[a-z0-9+.-]+);base64,(.*)$/is.exec(String(dataUrl || ''));
+  if (!match) throw Object.assign(new Error('Upload an image or video file.'), { status: 400 });
+  const mime = match[1].toLowerCase();
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error('Each reference file must be 8 MB or smaller.'), { status: 413 });
+  const ext = (mime.split('/')[1] || 'bin').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '');
+  const folder = path.join(UPLOAD_DIR, 'references');
+  await fs.mkdir(folder, { recursive: true });
+  const filename = `${randomUUID()}.${ext}`;
+  await fs.writeFile(path.join(folder, filename), bytes);
+  return `/uploads/references/${filename}`;
+}
+
+async function removeReferenceMedia(urls = []) {
+  await Promise.all(urls.map(async (url) => {
+    const prefix = '/uploads/references/';
+    if (!String(url).startsWith(prefix)) return;
+    const filename = path.basename(String(url).slice(prefix.length));
+    await fs.rm(path.join(UPLOAD_DIR, 'references', filename), { force: true }).catch(() => {});
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -114,7 +137,7 @@ app.get('/api/delivery/areas', async (_request, response, next) => {
 app.post('/api/orders', requireUserJWT, async (request, response, next) => {
   try {
     const input = orderInputSchema.parse(request.body);
-    const pricing = calculateOrder(input, catalogProducts, await repository.getPublicSettings());
+    const pricing = calculateOrder(input, await repository.listProducts({}), await repository.getPublicSettings());
     const orderId = newEntityId('EFU');
     const order = {
       id: orderId,
@@ -128,20 +151,7 @@ app.post('/api/orders', requireUserJWT, async (request, response, next) => {
 
     const saved = await repository.createOrder(order);
 
-    // Create Razorpay order if advance is due
-    let paymentOrder = null;
-    if (pricing.advanceDue > 0) {
-      try {
-        paymentOrder = await createRazorpayOrder({
-          amount: pricing.advanceDue,
-          receipt: orderId,
-          notes: { orderId, customerName: input.customer.name, customerPhone: input.customer.phone },
-        });
-      } catch (paymentError) {
-        console.error('[payment-error]', paymentError.message);
-        paymentOrder = { status: 'error', message: paymentError.message };
-      }
-    }
+    const paymentOrder = { status: 'manual', message: 'UPI advance is confirmed manually by the studio.' };
 
     // Send notifications (non-blocking)
     let notification;
@@ -186,6 +196,17 @@ app.post('/api/payments/verify', requireUserJWT, async (request, response, next)
     }
 
     return response.status(400).json({ verified: false, error: 'SIGNATURE_MISMATCH', message: 'Payment verification failed.' });
+  } catch (error) { return next(error); }
+});
+
+app.post('/api/orders/:id/payment-report', requireUserJWT, async (request, response, next) => {
+  try {
+    const amount = Number(request.body?.amount);
+    if (!Number.isSafeInteger(amount) || amount < 1) return response.status(400).json({ error: 'INVALID_AMOUNT', message: 'Enter the amount you sent.' });
+    const updated = await repository.reportPayment(request.params.id, request.user.sub, amount, String(request.body?.reference || '').trim().slice(0, 120));
+    if (!updated) return response.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'Order was not found for this account.' });
+    if (updated.error) return response.status(400).json({ error: updated.error, message: 'The reported amount is more than the remaining balance.' });
+    return response.json({ order: updated, message: 'Payment reported. The studio will verify receipt before updating your balance.' });
   } catch (error) { return next(error); }
 });
 
@@ -264,13 +285,84 @@ app.get('/api/orders/:id/queries', requireUserJWT, async (request, response, nex
   } catch (error) { return next(error); }
 });
 
+app.route('/api/conversations/:type/:id')
+  .get(requireUserJWT, async (request, response, next) => {
+    try {
+      const { type, id } = request.params;
+      const entity = type === 'order' ? await repository.getOrder(id) : type === 'request' ? await repository.getCustomRequest(id) : null;
+      if (!entity) return response.status(404).json({ error: 'CONVERSATION_NOT_FOUND' });
+      if ((entity.userId || entity.user_id) !== request.user.sub) return response.status(403).json({ error: 'FORBIDDEN' });
+      return response.json({ messages: await repository.listConversationMessages(type.toUpperCase(), id) });
+    } catch (error) { return next(error); }
+  })
+  .post(requireUserJWT, async (request, response, next) => {
+    try {
+      const { type, id } = request.params;
+      const entity = type === 'order' ? await repository.getOrder(id) : type === 'request' ? await repository.getCustomRequest(id) : null;
+      if (!entity) return response.status(404).json({ error: 'CONVERSATION_NOT_FOUND' });
+      if ((entity.userId || entity.user_id) !== request.user.sub) return response.status(403).json({ error: 'FORBIDDEN' });
+      const message = String(request.body?.message || '').trim();
+      if (!message || message.length > 3000) return response.status(400).json({ error: 'INVALID_MESSAGE', message: 'Write a message up to 3,000 characters.' });
+      const saved = await repository.addConversationMessage({ type: type.toUpperCase(), entityId: id, userId: request.user.sub, senderRole: 'CUSTOMER', message });
+      return response.status(201).json({ message: saved });
+    } catch (error) { return next(error); }
+  });
+
+app.get('/api/custom-requests/mine', requireUserJWT, async (request, response, next) => {
+  try { return response.json({ requests: await repository.listCustomRequestsByUser(request.user.sub) }); }
+  catch (error) { return next(error); }
+});
+
+app.get('/api/custom-requests/:id', requireUserJWT, async (request, response, next) => {
+  try {
+    const item = await repository.getCustomRequest(request.params.id);
+    if (!item) return response.status(404).json({ error: 'REQUEST_NOT_FOUND' });
+    if (item.userId !== request.user.sub) return response.status(403).json({ error: 'FORBIDDEN' });
+    return response.json({ request: item });
+  } catch (error) { return next(error); }
+});
+
+app.post('/api/custom-requests/:id/accept-quote', requireUserJWT, async (request, response, next) => {
+  try {
+    const custom = await repository.getCustomRequest(request.params.id);
+    if (!custom) return response.status(404).json({ error: 'REQUEST_NOT_FOUND' });
+    if (custom.userId !== request.user.sub) return response.status(403).json({ error: 'FORBIDDEN' });
+    const quote = custom.quote || {};
+    if (custom.status === 'QUOTE_ACCEPTED' && quote.orderId) {
+      const existingOrder = await repository.getOrder(quote.orderId);
+      if (existingOrder) return response.json({ order: existingOrder, reused: true });
+    }
+    const total = Number(quote.amount);
+    if (custom.status !== 'QUOTE_SENT' || !Number.isSafeInteger(total) || total < 1) {
+      return response.status(409).json({ error: 'QUOTE_UNAVAILABLE', message: 'There is no active quote to accept yet.' });
+    }
+    const id = newEntityId('EFU');
+    const advanceDue = Math.ceil(total / 2);
+    const order = {
+      id, userId: request.user.sub, status: 'PENDING_PAYMENT',
+      customer: { name: custom.customer.name, email: custom.customer.email, phone: custom.customer.phone, note: `Custom request ${custom.id}` },
+      delivery: { area: 'Muradnagar · pickup location to confirm', method: 'campus', handoverSpot: custom.pickupLocation || 'Confirm with customer', slotId: '', locationText: custom.pickupLocation || 'Confirm in chat', pickupDate: custom.neededBy || '' },
+      gift: {},
+      pricing: { lineItems: [{ productId: custom.productId || custom.id, productName: custom.title, quantity: 1, unitPrice: total, selected: [], customization: { description: custom.description, referenceUrls: custom.referenceUrls || [] }, lineTotal: total }], subtotal: total, deliveryFee: 0, giftWrapFee: 0, total, advanceDue, balanceDue: total - advanceDue, paymentPlan: 'ADVANCE_50', locationApproval: 'NOT_NEEDED', paymentOptions: ['ADVANCE_50'], hasCustomItem: true },
+    };
+    await repository.createOrder(order);
+    await repository.updateCustomRequestStatus(custom.id, 'QUOTE_ACCEPTED', { ...quote, orderId: id }, 'customer');
+    await repository.addConversationMessage({ type: 'REQUEST', entityId: custom.id, userId: request.user.sub, senderRole: 'CUSTOMER', message: `I accept the quote. Please proceed with order ${id}.` });
+    await repository.addConversationMessage({ type: 'ORDER', entityId: id, userId: request.user.sub, senderRole: 'ADMIN', message: `Your custom order is ready to begin after we verify ₹${advanceDue.toLocaleString('en-IN')} advance. Use the payment details on your order tracker.` });
+    return response.status(201).json({ order });
+  } catch (error) { return next(error); }
+});
+
 // ── Custom requests (protected) ───────────────────────────────────────
 app.post('/api/custom-requests', requireUserJWT, async (request, response, next) => {
   try {
     const input = customRequestSchema.parse(request.body);
     const product = catalogProducts.find((candidate) => candidate.id === input.productId);
-    const requestRecord = { ...input, id: newEntityId('CR'), productName: product?.name || '', status: 'NEW' };
+    const uploadedUrls = await Promise.all(input.referenceFiles.map((file) => saveReferenceMedia(file.data, file.name)));
+    const { referenceFiles, ...requestInput } = input;
+    const requestRecord = { ...requestInput, referenceUrls: [...input.referenceUrls, ...uploadedUrls], userId: request.user.sub, id: newEntityId('CR'), productName: product?.name || '', status: 'NEW' };
     const saved = await repository.createCustomRequest(requestRecord);
+    await repository.addConversationMessage({ type: 'REQUEST', entityId: saved.id, userId: request.user.sub, senderRole: 'CUSTOMER', message: saved.description });
 
     try {
       await notifyNewCustomRequest(saved);
@@ -303,21 +395,7 @@ app.post('/api/auth/register', async (request, response, next) => {
 });
 
 app.post('/api/auth/admin-register', async (request, response, next) => {
-  try {
-    const { email, password, name, phone, adminPassword } = request.body || {};
-    if (!email || !password || !name) {
-      return response.status(400).json({ error: 'MISSING_FIELDS', message: 'Name, email and password are required.' });
-    }
-    if (!adminPassword) {
-      return response.status(400).json({ error: 'MISSING_ADMIN_PASSWORD', message: 'Admin signup password is required.' });
-    }
-    const result = await registerAdmin(repository, { email, password, name, phone, adminPassword });
-    return response.status(201).json(result);
-  } catch (error) {
-    if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: 'EMAIL_TAKEN', message: error.message });
-    if (error.code === 'INVALID_ADMIN_PASSWORD') return response.status(403).json({ error: error.code, message: error.message });
-    return next(error);
-  }
+  return response.status(410).json({ error: 'ADMIN_SIGNUP_DISABLED', message: 'Admin accounts must be added by an owner from the Studio Desk.' });
 });
 
 app.post('/api/auth/login', async (request, response, next) => {
@@ -339,28 +417,28 @@ app.post('/api/auth/login', async (request, response, next) => {
 
 app.post('/api/auth/google', async (request, response, next) => {
   try {
-    const { credential, googleId, email, name, avatarUrl, _demo } = request.body || {};
-    let payload = { googleId, email, name, avatarUrl };
-    if (credential) {
-      try {
-        const base64Url = credential.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const json = JSON.parse(Buffer.from(base64, 'base64').toString());
-        payload = {
-          googleId: json.sub || googleId,
-          email: json.email || email,
-          name: json.name || name,
-          avatarUrl: json.picture || avatarUrl,
-        };
-      } catch { /* parse failed; fall back to explicit fields */ }
+    const { credential, accessToken } = request.body || {};
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return response.status(503).json({ error: 'GOOGLE_NOT_CONFIGURED', message: 'Google sign-in is not configured on this site yet.' });
+    let profile;
+    if (accessToken) {
+      const result = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!result.ok) return response.status(401).json({ error: 'INVALID_GOOGLE_TOKEN', message: 'Google sign-in could not verify your account.' });
+      profile = await result.json();
+    } else if (credential) {
+      const url = new URL('https://oauth2.googleapis.com/tokeninfo');
+      url.searchParams.set('id_token', credential);
+      const result = await fetch(url);
+      if (!result.ok) return response.status(401).json({ error: 'INVALID_GOOGLE_TOKEN', message: 'Google sign-in could not verify your account.' });
+      profile = await result.json();
+      if (profile.aud !== clientId) return response.status(401).json({ error: 'INVALID_GOOGLE_AUDIENCE' });
+    } else {
+      return response.status(400).json({ error: 'MISSING_GOOGLE_TOKEN', message: 'Google did not return a sign-in token.' });
     }
-    if (!payload.googleId) {
-      if (_demo) {
-        payload.googleId = `demo-${email || randomUUID().slice(0, 8)}`;
-      } else {
-        return response.status(400).json({ error: 'MISSING_GOOGLE_ID', message: 'Google sign-in needs a valid credential or googleId.' });
-      }
+    if (!profile.sub || !profile.email || !(profile.email_verified === true || profile.email_verified === 'true' || profile.verified_email === true)) {
+      return response.status(401).json({ error: 'UNVERIFIED_GOOGLE_ACCOUNT', message: 'Use a Google account with a verified email address.' });
     }
+    const payload = { googleId: profile.sub, email: profile.email, name: profile.name, avatarUrl: profile.picture };
     const result = await authenticateGoogle(repository, payload);
     return response.json(result);
   } catch (error) { return next(error); }
@@ -412,12 +490,84 @@ app.post('/api/admin/login', async (request, response, next) => {
       return response.status(400).json({ error: 'MISSING_CREDENTIALS', message: 'Email and password are required.' });
     }
 
-    const result = await authenticateAdmin(email, password);
+    const result = await authenticateAdmin(repository, email, password);
     if (!result) {
       return response.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' });
     }
 
     return response.json({ token: result.token, admin: result.admin });
+  } catch (error) { return next(error); }
+});
+
+app.get('/api/admin/team', requireOwnerJWT, async (_request, response, next) => {
+  try { return response.json({ admins: await repository.listAdminUsers() }); }
+  catch (error) { return next(error); }
+});
+
+app.post('/api/admin/team', requireOwnerJWT, async (request, response, next) => {
+  try {
+    const admin = await createTeamAdmin(repository, request.body || {});
+    return response.status(201).json({ admin });
+  } catch (error) {
+    if (error.code === 'EMAIL_TAKEN') return response.status(409).json({ error: error.code, message: error.message });
+    if (error.code === 'INVALID_ADMIN') return response.status(400).json({ error: error.code, message: error.message });
+    return next(error);
+  }
+});
+
+app.patch('/api/admin/team/:id', requireOwnerJWT, async (request, response, next) => {
+  try {
+    if (!['true', 'false'].includes(String(request.body?.isActive))) return response.status(400).json({ error: 'INVALID_STATUS' });
+    const admin = await repository.updateUser(request.params.id, { isActive: request.body.isActive === 'true' });
+    if (!admin) return response.status(404).json({ error: 'ADMIN_NOT_FOUND' });
+    return response.json({ admin });
+  } catch (error) { return next(error); }
+});
+
+app.post('/api/admin/orders/:id/payments', requireAdminJWT, async (request, response, next) => {
+  try {
+    const amount = Number(request.body?.amount);
+    if (!Number.isSafeInteger(amount) || amount <= 0) return response.status(400).json({ error: 'INVALID_AMOUNT', message: 'Enter a payment amount greater than zero.' });
+    const method = ['UPI', 'CASH', 'BANK_TRANSFER', 'OTHER'].includes(request.body?.method) ? request.body.method : 'UPI';
+    const updated = await repository.recordManualPayment(request.params.id, { amount, method, reference: String(request.body?.reference || '').trim().slice(0, 120), note: String(request.body?.note || '').trim().slice(0, 500) }, request.admin?.email || 'admin');
+    if (!updated) return response.status(404).json({ error: 'ORDER_NOT_FOUND' });
+    if (updated.error === 'OVERPAYMENT') return response.status(400).json({ error: 'OVERPAYMENT', message: 'This amount is more than the remaining balance.' });
+    return response.json({ order: updated });
+  } catch (error) { return next(error); }
+});
+
+app.get('/api/admin/conversations', requireAdminJWT, async (_request, response, next) => {
+  try { return response.json({ conversations: await repository.listConversations() }); }
+  catch (error) { return next(error); }
+});
+
+app.get('/api/admin/conversations/:type/:id', requireAdminJWT, async (request, response, next) => {
+  try { return response.json({ messages: await repository.listConversationMessages(request.params.type.toUpperCase(), request.params.id) }); }
+  catch (error) { return next(error); }
+});
+
+app.post('/api/admin/conversations/:type/:id', requireAdminJWT, async (request, response, next) => {
+  try {
+    const { type, id } = request.params;
+    const entity = type === 'order' ? await repository.getOrder(id) : type === 'request' ? await repository.getCustomRequest(id) : null;
+    if (!entity) return response.status(404).json({ error: 'CONVERSATION_NOT_FOUND' });
+    const message = String(request.body?.message || '').trim();
+    if (!message || message.length > 3000) return response.status(400).json({ error: 'INVALID_MESSAGE', message: 'Write a message up to 3,000 characters.' });
+    const saved = await repository.addConversationMessage({ type: type.toUpperCase(), entityId: id, userId: entity.userId || entity.user_id, senderRole: 'ADMIN', message });
+    return response.status(201).json({ message: saved });
+  } catch (error) { return next(error); }
+});
+
+app.delete('/api/admin/conversations/:type/:id', requireAdminJWT, async (request, response, next) => {
+  try {
+    const { type, id } = request.params;
+    const entity = type === 'order' ? await repository.getOrder(id) : type === 'request' ? await repository.getCustomRequest(id) : null;
+    if (!entity) return response.status(404).json({ error: 'CONVERSATION_NOT_FOUND' });
+    const completed = type === 'order' ? ['DELIVERED', 'COMPLETED'].includes(entity.status) : entity.status === 'COMPLETED';
+    if (!completed) return response.status(409).json({ error: 'ORDER_NOT_COMPLETE', message: 'Chat and reference files can be cleared after the order or request is complete.' });
+    await repository.deleteConversation(type.toUpperCase(), id);
+    if (type === 'request') await removeReferenceMedia(await repository.clearCustomRequestMedia(id) || []);
+    return response.json({ ok: true });
   } catch (error) { return next(error); }
 });
 
@@ -539,35 +689,7 @@ app.get('/api/admin/products', requireAdminJWT, async (request, response, next) 
   try {
     const limit = Math.min(Number(request.query.limit || 200), 500);
     const { category, q } = request.query;
-    let list = [];
-    if (repository.mode === 'managed-mysql') {
-      const pool = (await import('./db.js')).getPool();
-      const where = []; const params = [];
-      if (category && category !== 'all') { where.push('category = ?'); params.push(category); }
-      if (q) { where.push('(name LIKE ? OR description LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
-      const sql = `SELECT * FROM products ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY is_active DESC, sort_order, created_at DESC LIMIT ?`;
-      const [rows] = await pool.query(sql, [...params, limit]);
-      list = rows.map((row) => {
-        let occasions = [];
-        try { occasions = row.occasions_json ? (typeof row.occasions_json === 'string' ? JSON.parse(row.occasions_json) : row.occasions_json) : []; } catch { occasions = []; }
-        let options = [];
-        try { options = row.options_json ? (typeof row.options_json === 'string' ? JSON.parse(row.options_json) : row.options_json) : []; } catch { options = []; }
-        return {
-          id: row.id, slug: row.slug, name: row.name, category: row.category, type: row.type,
-          price: row.price, originalPrice: row.original_price, production: row.production,
-          description: row.description, image: row.image, badge: row.badge || '',
-          occasions, audience: row.audience, premium: Boolean(row.premium),
-          customizable: Boolean(row.customizable), allowCustomRequest: Boolean(row.allow_custom_request),
-          isMadeToOrder: Boolean(row.is_made_to_order), returnable: Boolean(row.returnable),
-          disclaimer: row.disclaimer, careInstructions: row.care_instructions,
-          options, isActive: Boolean(row.is_active),
-          sortOrder: row.sort_order, createdAt: row.created_at,
-        };
-      });
-    } else {
-      list = await repository.listProducts({ category, q });
-      list = list.slice(0, limit);
-    }
+    const list = (await repository.listAdminProducts({ category, q })).slice(0, limit);
     return response.json({ products: list });
   } catch (error) { return next(error); }
 });
@@ -660,7 +782,8 @@ app.delete('/api/admin/categories/:id', requireAdminJWT, async (request, respons
 // ── Admin Image Upload (multipart-free; accepts base64 or URL) ────────
 app.post('/api/admin/upload', requireAdminJWT, async (request, response, next) => {
   try {
-    const { data, filename } = request.body || {};
+    const { data: requestedData, image, filename } = request.body || {};
+    const data = requestedData || image;
     if (!data) return response.status(400).json({ error: 'MISSING_DATA', message: 'Image data required.' });
     const url = await saveBase64Image(data, (filename || 'upload').replace(/[^a-z0-9]+/gi, '-').toLowerCase());
     return response.status(201).json({ url });
@@ -689,6 +812,7 @@ app.get('/api/admin/notification-logs', requireAdminJWT, async (request, respons
 app.use('/api', (_request, response) => response.status(404).json({ error: 'API_NOT_FOUND', message: 'That API route does not exist.' }));
 
 const distPath = path.resolve(__dirname, '../dist');
+app.use('/uploads', express.static(UPLOAD_DIR, { fallthrough: false, maxAge: 0 }));
 app.use(express.static(distPath));
 app.get(/^(?!\/api(?:\/|$)).*/, (_request, response) => response.sendFile(path.join(distPath, 'index.html')));
 

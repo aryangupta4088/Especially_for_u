@@ -4,7 +4,10 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { randomBytes, randomUUID } from 'node:crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'efu-fallback-dev-secret';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured in production.');
+}
+const JWT_SECRET = process.env.JWT_SECRET || randomBytes(32).toString('hex');
 const USER_TOKEN_EXPIRY = '7d';
 const ADMIN_TOKEN_EXPIRY = '24h';
 const PASSWORD_RESET_TTL_HOURS = 1;
@@ -35,10 +38,16 @@ function admins() {
   return cachedAdmins;
 }
 
-export async function authenticateAdmin(email, password) {
-  const admin = admins().find((a) => a.email === email.toLowerCase().trim());
+export async function authenticateAdmin(repository, email, password) {
+  let admin = admins().find((a) => a.email === email.toLowerCase().trim());
+  if (!admin) {
+    const account = await repository.getUserByEmail(email, true);
+    if (account && account.isActive && ['OWNER', 'ADMIN', 'MANAGER', 'STAFF'].includes(String(account.role).toUpperCase())) {
+      admin = { ...account, passwordHash: account.passwordHash, role: String(account.role).toUpperCase() };
+    }
+  }
   if (!admin) return null;
-  const match = await bcrypt.compare(password, admin.passwordHash);
+  const match = await bcrypt.compare(password, admin.passwordHash || '');
   if (!match) return null;
   const token = jwt.sign(
     { sub: admin.id, email: admin.email, name: admin.name, role: admin.role, type: 'admin' },
@@ -50,13 +59,6 @@ export async function authenticateAdmin(email, password) {
 
 export function requireAdminJWT(request, response, next) {
   const header = request.headers.authorization;
-  if (process.env.ADMIN_API_TOKEN && header) {
-    const legacyToken = header.replace(/^Bearer\s+/i, '');
-    if (legacyToken === process.env.ADMIN_API_TOKEN) {
-      request.admin = { id: 'legacy-token', email: 'token-auth', name: 'Token Auth', role: 'OWNER' };
-      return next();
-    }
-  }
   if (!header || !header.startsWith('Bearer ')) {
     return response.status(401).json({ error: 'UNAUTHORIZED', message: 'Admin authentication is required.' });
   }
@@ -69,6 +71,30 @@ export function requireAdminJWT(request, response, next) {
   } catch {
     return response.status(401).json({ error: 'TOKEN_EXPIRED', message: 'Session expired. Please log in again.' });
   }
+}
+
+export function requireOwnerJWT(request, response, next) {
+  return requireAdminJWT(request, response, () => {
+    if (String(request.admin?.role || '').toUpperCase() !== 'OWNER') {
+      return response.status(403).json({ error: 'OWNER_REQUIRED', message: 'Only an owner can manage admin accounts.' });
+    }
+    return next();
+  });
+}
+
+export async function createTeamAdmin(repository, { email, password, name, phone }) {
+  if (!email || !password || !name || password.length < 10) {
+    const error = new Error('Name, email and a password of at least 10 characters are required.');
+    error.code = 'INVALID_ADMIN';
+    throw error;
+  }
+  const existing = await repository.getUserByEmail(email);
+  if (existing) {
+    const error = new Error('An account with this email already exists.');
+    error.code = 'EMAIL_TAKEN';
+    throw error;
+  }
+  return repository.createUser({ id: `A-${randomUUID().slice(0, 8).toUpperCase()}`, email: email.trim().toLowerCase(), passwordHash: await bcrypt.hash(password, 12), name: name.trim(), phone: phone || '', role: 'ADMIN' });
 }
 
 function signUserToken(user) {

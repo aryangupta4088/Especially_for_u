@@ -18,10 +18,7 @@ export default function ProtectedRoute({ children, publicRoute = false, requireA
   if (requireAdmin) {
     const role = user?.role;
     if (role !== 'admin' && role !== 'ADMIN' && role !== 'OWNER' && role !== 'Owner') {
-      const adminToken = localStorage.getItem('efu_admin_token');
-      if (!adminToken) {
-        return <Navigate to="/" replace />;
-      }
+      return <Navigate to="/" replace />;
     }
   }
   return children;

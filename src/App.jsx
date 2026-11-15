@@ -308,8 +308,8 @@ function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa
 
 function ProductCard({ product, onAdd, onWish, isWished, categories = mockCategories }) {
   const navigate = useNavigate();
-  const cta = product.type === 'CUSTOM_QUOTE' ? 'Request quote' : product.type === 'CUSTOM_FIXED' ? 'Customize' : 'Add to cart';
-  const handlePrimary = () => product.type === 'CUSTOM_QUOTE' ? navigate(`/custom-request?product=${product.slug}`) : onAdd(product);
+  const cta = 'Request this item';
+  const handlePrimary = () => navigate(`/custom-request?product=${product.slug}`);
   return <motion.article className={`product-card ${product.premium ? 'product-premium' : ''}`} whileHover={{ y: -7 }} transition={pageTransition}>
     <div className="product-image-wrap">
       <Link to={`/product/${product.slug}`} className="product-image-link"><img src={product.image} alt={product.name} loading="lazy" /></Link>
@@ -393,27 +393,65 @@ function ProductPage({ live }) {
   const [selected, setSelected] = useState(product.options?.map((option) => option.values[0].name) || []);
   const [quantity, setQuantity] = useState(1);
   const price = Number(product.price) + (product.options || []).reduce((sum, option, index) => sum + (option.values.find((value) => value.name === selected[index])?.adjustment || 0), 0);
-  const handleCta = () => { if (product.type === 'CUSTOM_QUOTE') navigate(`/custom-request?product=${product.slug}`); else { addToCart({ ...product, selected, quantity, price }); navigate('/cart'); } };
-  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div><div className="gallery-thumbs"><button className="is-active"><img src={product.image} alt="" /></button><button><img src={media.collage} alt="" /></button><button><img src={media.product4} alt="" /></button></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => onWish(product)}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><div className="rating-row"><span className="stars">★★★★★</span><span>4.9 · 12 lovely reviews</span></div><PriceTag product={product} price={price} /><p className="detail-description">{product.description}</p>{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>{product.type === 'CUSTOM_QUOTE' ? 'Request a quote' : product.type === 'CUSTOM_FIXED' ? `Customize · ${formatINR(price)}` : `Add to cart · ${formatINR(price)}`}</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Secure payments</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  const handleCta = () => navigate(`/custom-request?product=${product.slug}`);
+  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div><div className="gallery-thumbs"><button className="is-active"><img src={product.image} alt="" /></button><button><img src={media.collage} alt="" /></button><button><img src={media.product4} alt="" /></button></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => onWish(product)}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><div className="rating-row"><span className="stars">★★★★★</span><span>4.9 · 12 lovely reviews</span></div><PriceTag product={product} price={price} /><p className="detail-description">{product.description}</p>{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>Request this item</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CustomRequestPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const { token, user } = useAuth();
   const [color, setColor] = useState('Blush pink');
+  const [files, setFiles] = useState([]);
+  const [requestId, setRequestId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', budget: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '' });
   const live = useLive();
   const products = live?.products?.length ? live.products : mockProducts;
   const currentSettings = live?.settings || storeSettings;
-  const linkedSlug = new URLSearchParams(window.location.search).get('product');
-  const linkedProduct = products.find((item) => item.slug === linkedSlug);
+  const linkedProduct = products.find((item) => item.slug === new URLSearchParams(window.location.search).get('product'));
+  useEffect(() => { if (linkedProduct) setForm((current) => ({ ...current, title: current.title || `Request: ${linkedProduct.name}` })); }, [linkedProduct?.id]);
+  const setField = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const chooseFiles = (event) => {
+    const selected = Array.from(event.target.files || []).slice(0, 5);
+    const invalid = selected.find((file) => !/^(image|video)\//.test(file.type) || file.size > 8 * 1024 * 1024);
+    if (invalid) { setError(`${invalid.name}: choose an image or video up to 8 MB.`); return; }
+    setError(''); setFiles(selected);
+  };
+  const submitRequest = async (event) => {
+    event.preventDefault(); setError(''); setLoading(true);
+    try {
+      const referenceFiles = await Promise.all(files.map(async (file) => ({ name: file.name, data: await fileToBase64(file) })));
+      const response = await fetch('/api/custom-requests', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          productId: linkedProduct?.id || '', title: form.title, description: `${form.description}${form.extra ? `\n\nAdditional details: ${form.extra}` : ''}`,
+          customer: { name: form.name, phone: form.phone, email: form.email }, neededBy: form.neededBy, budget: form.budget,
+          size: form.size, colours: color, occasion: form.occasion, pickupLocation: form.pickupLocation, referenceFiles,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not send your idea. Please try again.');
+      setRequestId(data.request.id);
+    } catch (err) { setError(err.message || 'Could not send your idea.'); }
+    finally { setLoading(false); }
+  };
   if (!currentSettings.acceptingCustomRequests) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">A short studio pause</p><h1>Custom requests are <em>resting for now.</em></h1><p>{currentSettings.pauseMessage} You can still browse the shop and save a little something for later.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Browse the shop</Button></main><Footer /></GradientBackground>;
-  if (submitted) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">It’s on its way to us</p><h1>Your idea is <em>safe with us.</em></h1><p>We’ve received your request and will send a thoughtful reply within 1–2 days.</p><GlassCard className="request-id-card"><span>Your request ID</span><strong>CR-1042</strong><Badge tone="icy">REQUESTED</Badge></GlassCard><div className="hero-actions"><Button as={Link} to="/account" icon={<ArrowRight size={17} />}>Track your request</Button><Button as={Link} to="/shop" variant="secondary">Browse the shop</Button></div></main><Footer /></GradientBackground>;
-  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Bring the half-formed thought, the colour palette, the screenshot you saved at 2am. We’ll turn it into something you can hold.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={(event) => { event.preventDefault(); setSubmitted(true); }}><div className="form-grid"><label className="floating-field"><input required placeholder=" " /><span>Your name</span></label><label className="floating-field"><input required placeholder=" " type="tel" /><span>Phone number</span></label><label className="floating-field"><input required placeholder=" " type="email" /><span>Email address</span></label><label className="floating-field"><input required placeholder=" " /><span>Idea title</span></label></div><label className="floating-field floating-textarea"><textarea required placeholder=" " rows="4" /><span>Tell us about it — the story, the vibe, the tiny details...</span></label><div className="form-section"><div className="field-title"><strong>Reference images</strong><span>up to 5 images</span></div><div className="file-drop"><UploadCloud size={22} /><strong>Drop your inspo here</strong><span>or browse from your device</span><small>JPG, PNG or WEBP · max 5MB each</small></div></div><div className="form-grid"><label className="select-field"><span>Preferred size</span><select><option>Not sure yet</option><option>Small / desk size</option><option>Medium / shelf size</option><option>Large / statement piece</option></select><ChevronDown size={15} /></label><label className="select-field"><span>Occasion</span><select><option>Just because</option><option>Birthday</option><option>Anniversary</option><option>Graduation</option><option>Festive</option></select><ChevronDown size={15} /></label></div><div className="form-section"><div className="field-title"><strong>Preferred colour</strong><span>{color}</span></div><div className="color-swatches">{['Blush pink', 'Lavender', 'Icy blue', 'Surprise me'].map((item, index) => <button type="button" className={color === item ? 'is-selected' : ''} onClick={() => setColor(item)} key={item}><span className={`swatch swatch-${index}`} />{item}</button>)}</div></div><div className="form-section"><div className="field-title"><strong>Budget range</strong><span>₹1,500 — ₹5,000</span></div><div className="budget-track"><span /><span /><span /></div><div className="budget-labels"><span>₹500</span><span>₹10,000+</span></div></div><div className="form-grid"><label className="floating-field"><input required placeholder=" " type="date" /><span>Needed by</span></label><label className="floating-field"><input placeholder=" " /><span>Anything else?</span></label></div><Button type="submit" className="full-button" icon={<Send size={16} />}>Send my idea</Button><p className="form-footnote">By sending this, you’re simply starting a conversation. {linkedProduct ? `This request will be linked to ${linkedProduct.name}. ` : ''}No payment until you approve a quote.</p></form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={media.collage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Request received', 'We review your idea', 'A clear quote arrives', 'You say yes', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  if (requestId) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">It’s on its way to us</p><h1>Your idea is <em>safe with us.</em></h1><p>We’ve received your request and will reply in your request chat. Your contact number is saved with it so we can call if needed.</p><GlassCard className="request-id-card"><span>Your request ID</span><strong>{requestId}</strong><Badge tone="icy">REQUESTED</Badge></GlassCard><div className="hero-actions"><Button as={Link} to={`/account/requests/${requestId}`} icon={<MessageCircle size={17} />}>Open request chat</Button><Button as={Link} to="/shop" variant="secondary">Browse the shop</Button></div></main><Footer /></GradientBackground>;
+  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and reference files. We’ll review it, ask questions in your request chat and send you a clear quote.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
+    <div className="form-grid"><label className="floating-field"><input required value={form.name} onChange={setField('name')} placeholder=" " /><span>Your name</span></label><label className="floating-field"><input required type="tel" value={form.phone} onChange={setField('phone')} placeholder=" " /><span>Phone number (we may call)</span></label><label className="floating-field"><input required type="email" value={form.email} onChange={setField('email')} placeholder=" " /><span>Email address</span></label><label className="floating-field"><input required value={form.title} onChange={setField('title')} placeholder=" " /><span>Idea title</span></label></div>
+    <label className="floating-field floating-textarea"><textarea required value={form.description} onChange={setField('description')} placeholder=" " rows="4" /><span>Tell us about it — the story, the vibe, the tiny details...</span></label>
+    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : 'Only the studio team will use these to review your request.'}</small></label></div>
+    <div className="form-grid"><label className="select-field"><span>Preferred size</span><select value={form.size} onChange={setField('size')}><option>Not sure yet</option><option>Small / desk size</option><option>Medium / shelf size</option><option>Large / statement piece</option></select><ChevronDown size={15} /></label><label className="select-field"><span>Occasion</span><select value={form.occasion} onChange={setField('occasion')}><option>Just because</option><option>Birthday</option><option>Anniversary</option><option>Graduation</option><option>Festive</option></select><ChevronDown size={15} /></label></div>
+    <div className="form-section"><div className="field-title"><strong>Preferred colour</strong><span>{color}</span></div><div className="color-swatches">{['Blush pink', 'Lavender', 'Icy blue', 'Surprise me'].map((item, index) => <button type="button" className={color === item ? 'is-selected' : ''} onClick={() => setColor(item)} key={item}><span className={`swatch swatch-${index}`} />{item}</button>)}</div></div>
+    <div className="form-grid"><label className="floating-field"><input required value={form.neededBy} onChange={setField('neededBy')} placeholder=" " type="date" /><span>Needed by</span></label><label className="floating-field"><input value={form.budget} onChange={setField('budget')} placeholder=" " /><span>Budget range (₹)</span></label></div><label className="floating-field"><input value={form.pickupLocation} onChange={setField('pickupLocation')} placeholder=" " /><span>Pickup location / area (Muradnagar)</span></label><label className="floating-field"><input value={form.extra} onChange={setField('extra')} placeholder=" " /><span>Anything else?</span></label>
+    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" disabled={loading} className="full-button" icon={<Send size={16} />}>{loading ? 'Sending your idea…' : 'Send my idea'}</Button><p className="form-footnote">No payment until you approve a quote. We save your phone number with the request so we can contact you about it.</p>
+    </form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={media.collage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Request received', 'We review your idea', 'A clear quote arrives in chat', 'You say yes', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CartPage() {
   const { cart, updateQuantity, removeFromCart } = useApp();
   const subtotal = cart.reduce((sum, item) => sum + (item.price || item.product?.price || 0) * item.quantity, 0);
-  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container cart-page"><section className="page-intro compact-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Your little collection</p><h1>Cart, but make it <em>soft.</em></h1><p>Everything here is made to order with a little extra care.</p></div></section>{cart.length === 0 ? <EmptyState title="Your cart is still dreamy and empty" body="Start with a ready-made favourite, or tell us about something custom." onClick={() => window.location.assign('/shop')} /> : <div className="cart-layout"><div className="cart-items">{cart.map((item) => <GlassCard className="cart-item" key={item.key}><img src={item.image} alt={item.name} /><div className="cart-item-copy"><div className="item-kicker">{item.type === 'CUSTOM_FIXED' ? 'Customised for you' : 'Ready-made favourite'}</div><h3>{item.name}</h3><div className="item-chips">{(item.selected || []).map((option) => <span key={option}>{option}</span>)}</div><button className="remove-button" onClick={() => removeFromCart(item.key)}>Remove</button></div><div className="cart-item-end"><strong>{formatINR((item.price || item.product?.price || 0) * item.quantity)}</strong><div className="quantity-stepper"><button onClick={() => updateQuantity(item.key, Math.max(1, item.quantity - 1))}><Minus size={14} /></button><span>{item.quantity}</span><button onClick={() => updateQuantity(item.key, item.quantity + 1)}><Plus size={14} /></button></div></div></GlassCard>)}</div><GlassCard className="summary-card"><p className="eyebrow">Your order summary</p><h2>A little joy, coming up.</h2><div className="coupon-field"><input placeholder="Have a coupon?" /><button>Apply</button></div><div className="summary-lines"><div><span>Subtotal</span><strong>{formatINR(subtotal)}</strong></div><div><span>Muradnagar delivery</span><strong>{subtotal > 1000 ? 'Free' : formatINR(50)}</strong></div><div className="summary-total"><span>Total</span><strong>{formatINR(subtotal + (subtotal > 1000 ? 0 : 50))}</strong></div></div><p className="summary-note"><Truck size={15} /> We currently deliver only in Muradnagar. More areas coming soon!</p><Button as={Link} to="/checkout" className="full-button" icon={<ArrowRight size={16} />}>Continue to checkout</Button><div className="summary-trust"><Check size={14} /> Secure payments by Razorpay</div></GlassCard></div>}</main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container cart-page"><section className="page-intro compact-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Your little collection</p><h1>Cart, but make it <em>soft.</em></h1><p>Everything here is made to order with a little extra care.</p></div></section>{cart.length === 0 ? <EmptyState title="Your cart is still dreamy and empty" body="Start with a ready-made favourite, or tell us about something custom." onClick={() => window.location.assign('/shop')} /> : <div className="cart-layout"><div className="cart-items">{cart.map((item) => <GlassCard className="cart-item" key={item.key}><img src={item.image} alt={item.name} /><div className="cart-item-copy"><div className="item-kicker">{item.type === 'CUSTOM_FIXED' ? 'Customised for you' : 'Ready-made favourite'}</div><h3>{item.name}</h3><div className="item-chips">{(item.selected || []).map((option) => <span key={option}>{option}</span>)}</div><button className="remove-button" onClick={() => removeFromCart(item.key)}>Remove</button></div><div className="cart-item-end"><strong>{formatINR((item.price || item.product?.price || 0) * item.quantity)}</strong><div className="quantity-stepper"><button onClick={() => updateQuantity(item.key, Math.max(1, item.quantity - 1))}><Minus size={14} /></button><span>{item.quantity}</span><button onClick={() => updateQuantity(item.key, item.quantity + 1)}><Plus size={14} /></button></div></div></GlassCard>)}</div><GlassCard className="summary-card"><p className="eyebrow">Your order summary</p><h2>A little joy, coming up.</h2><div className="coupon-field"><input placeholder="Have a coupon?" /><button>Apply</button></div><div className="summary-lines"><div><span>Subtotal</span><strong>{formatINR(subtotal)}</strong></div><div><span>Muradnagar delivery</span><strong>{subtotal > 1000 ? 'Free' : formatINR(50)}</strong></div><div className="summary-total"><span>Total</span><strong>{formatINR(subtotal + (subtotal > 1000 ? 0 : 50))}</strong></div></div><p className="summary-note"><Truck size={15} /> We currently deliver only in Muradnagar. More areas coming soon!</p><Button as={Link} to="/checkout" className="full-button" icon={<ArrowRight size={16} />}>Continue to checkout</Button><div className="summary-trust"><Check size={14} /> Manual UPI payment</div></GlassCard></div>}</main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CheckoutPage() {
@@ -424,6 +462,10 @@ function CheckoutPage() {
   const [createdOrder, setCreatedOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentReported, setPaymentReported] = useState(false);
+  const [paymentReportError, setPaymentReportError] = useState('');
+  const [reportingPayment, setReportingPayment] = useState(false);
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   const [contact, setContact] = useState({
@@ -479,8 +521,23 @@ function CheckoutPage() {
     } catch (err) { setSubmitError(err.message || 'Something went wrong. Please try again.'); }
     finally { setSubmitting(false); }
   };
+  const reportAdvance = async () => {
+    if (!createdOrder?.id) return;
+    setReportingPayment(true); setPaymentReportError('');
+    try {
+      const amount = Number(createdOrder.pricing?.advanceDue || createdOrder.advance_due || Math.ceil(Number(createdOrder.pricing?.total || createdOrder.total || 0) / 2));
+      const response = await fetch(`/api/orders/${createdOrder.id}/payment-report`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ amount, reference: paymentReference }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not report your payment.');
+      setPaymentReported(true);
+    } catch (err) { setPaymentReportError(err.message || 'Could not report your payment.'); }
+    finally { setReportingPayment(false); }
+  };
   if (currentSettings.storeStatus !== 'OPEN') return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">Checkout is taking a little pause</p><h1>We’re <em>fully booked</em> for now.</h1><p>{currentSettings.pauseMessage} Your cart is safe, and you can come back when the next slots open.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Keep browsing</Button></main><Footer /></GradientBackground>;
-  if (success) return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your order is in good hands</p><h1>Thank you, <em>lovely human.</em></h1><p>Your order <strong>{createdOrder?.id || 'EFU-1043'}</strong> is confirmed. We’ll send a note when it moves into production.</p><GlassCard className="order-success-card"><div><span>Ready by</span><strong>{createdOrder?.estimatedDate || createdOrder?.estimated_date ? new Date(createdOrder.estimatedDate || createdOrder.estimated_date).toLocaleDateString() : (delivery.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : 'Set by studio soon')}</strong></div><div><span>Delivery</span><strong>{delivery.method === 'campus' ? 'Campus handover' : 'Home delivery'}</strong></div><div><span>Payment</span><strong>{createdOrder?.status === 'PENDING_PAYMENT' ? 'Advance due' : (createdOrder?.status || 'Processing')}</strong></div></GlassCard><Button as={Link} to="/track-order" icon={<ArrowRight size={17} />}>Track your order</Button></main><Footer /></GradientBackground>;
+  if (success) {
+    const advanceAmount = Number(createdOrder?.pricing?.advanceDue || createdOrder?.advance_due || Math.ceil(Number(createdOrder?.pricing?.total || createdOrder?.total || 0) / 2));
+    return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-success"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">Your request is in good hands</p><h1>Thank you, <em>{contact.name || 'lovely human'}.</em></h1><p>Order <strong>{createdOrder?.id}</strong> is saved. Pay the 50% advance and we’ll begin after we verify it.</p><GlassCard style={{ maxWidth: 560, margin: '22px auto', padding: 22, textAlign: 'left' }}><p className="eyebrow">UPI advance · {formatINR(advanceAmount)}</p>{currentSettings.upiQrImage ? <img src={currentSettings.upiQrImage} alt="Studio UPI QR code" style={{ display: 'block', width: 210, height: 210, objectFit: 'contain', background: '#fff', borderRadius: 14, padding: 8, margin: '0 auto 14px', border: '1px solid var(--line)' }} /> : <div style={{ padding: 18, borderRadius: 12, background: 'rgba(90,63,86,.05)', color: 'var(--muted)', textAlign: 'center' }}>The studio is setting up its QR code. Contact us in your order chat for payment details.</div>}{currentSettings.upiId && <p style={{ textAlign: 'center' }}>UPI ID: <strong>{currentSettings.upiId}</strong></p>}<p style={{ color: 'var(--muted)', fontSize: 13 }}>{currentSettings.paymentInstructions || 'Pay by UPI. The studio will confirm after checking the account.'}</p>{paymentReported ? <Badge tone="icy">Payment reported · awaiting studio verification</Badge> : <><label className="floating-field" style={{ marginTop: 12 }}><input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder=" " /><span>UPI transaction reference (optional)</span></label><Button onClick={reportAdvance} disabled={reportingPayment} className="full-button" style={{ marginTop: 10 }}>{reportingPayment ? 'Sending…' : `I’ve sent ${formatINR(advanceAmount)}`}</Button></>}{paymentReportError && <p role="alert" style={{ color: '#c55a83' }}>{paymentReportError}</p>}</GlassCard><GlassCard className="order-success-card"><div><span>Ready by</span><strong>{createdOrder?.estimatedDate || createdOrder?.estimated_date ? new Date(createdOrder.estimatedDate || createdOrder.estimated_date).toLocaleDateString() : (delivery.pickupDate ? new Date(delivery.pickupDate).toLocaleDateString() : 'Set by studio soon')}</strong></div><div><span>Delivery</span><strong>{delivery.method === 'campus' ? 'Campus handover' : 'Home delivery'}</strong></div><div><span>Payment status</span><strong>{paymentReported ? 'Awaiting verification' : 'Advance due'}</strong></div></GlassCard><Button as={Link} to="/track-order" icon={<ArrowRight size={17} />}>Track your order</Button></main><Footer /></GradientBackground>;
+  }
   const steps = ['Contact', 'Delivery', 'Payment', 'Review & pay'];
   return <GradientBackground variant="cart"><Navbar cartCount={cart.length} /><main className="container checkout-page"><div className="checkout-header"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> Almost yours</p><h1>Let’s make it <em>official.</em></h1></div><div className="checkout-secure"><Check size={14} /> Secure checkout</div></div><div className="checkout-stepper">{steps.map((item, index) => <div className={`checkout-step ${step >= index + 1 ? 'is-active' : ''}`} key={item}><span>{step > index + 1 ? <Check size={13} /> : index + 1}</span><strong>{item}</strong>{index < steps.length - 1 && <i />}</div>)}</div><div className="checkout-layout"><GlassCard className="checkout-card">{step === 1 && <CheckoutContact contact={contact} setContact={setContact} />}{step === 2 && <CheckoutDelivery delivery={delivery} setDelivery={setDelivery} />}{step === 3 && <CheckoutPayment />}{step === 4 && <CheckoutReview contact={contact} delivery={delivery} />}</GlassCard><GlassCard className="checkout-summary"><p className="eyebrow">Your pieces</p>{cart.length ? cart.map((item) => <div className="checkout-item" key={item.key}><img src={item.image} alt="" /><div><strong>{item.name}</strong><span>Qty {item.quantity}</span></div><b>{formatINR(item.price * item.quantity)}</b></div>) : <div className="checkout-item"><div><strong>Sample order preview</strong><span>Add an item from Shop to personalise this.</span></div><b>₹899</b></div>}<div className="summary-total"><span>Total</span><strong>{formatINR(cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899)}</strong></div><p className="summary-note"><Truck size={15} /> Muradnagar only · campus or home delivery</p></GlassCard></div><div className="checkout-actions">{step > 1 && <Button variant="ghost" onClick={() => setStep(step - 1)}><ChevronLeft size={16} /> Back</Button>}{submitError && <span style={{ color: '#c55a83', fontSize: 13, alignSelf: 'center' }}>{submitError}</span>}<Button onClick={() => step === 4 ? handlePlaceOrder() : setStep(step + 1)} icon={<ArrowRight size={16} />} disabled={submitting}>{submitting ? 'Placing order…' : (step === 4 ? 'Pay securely' : 'Continue')}</Button></div></main></GradientBackground>;
 }
@@ -504,11 +561,11 @@ function CheckoutDelivery({ delivery, setDelivery }) {
 
 function CheckoutPayment() {
   const { cart } = useApp();
+  const live = useLive();
+  const settings = live?.settings || storeSettings;
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0) || 899;
-  const hasCustom = cart.some((item) => item.type === 'CUSTOM_FIXED' || item.type === 'CUSTOM_QUOTE' || item.customizable);
   const advance = Math.ceil(total * 0.5);
-  const choices = hasCustom ? [{ title: 'Pay 50% advance online', detail: `Pay ${formatINR(advance)} now, the rest at delivery.`, icon: Tag }] : total <= 300 ? [{ title: 'Pay full amount online', detail: 'Fast, secure and all done now.', icon: CreditCard }, { title: 'Cash on delivery', detail: 'Pay when your Muradnagar order is handed over.', icon: Package }] : total <= 1000 ? [{ title: 'Pay full amount online', detail: 'Fast, secure and all done now.', icon: CreditCard }, { title: 'COD with ₹100 advance', detail: `Pay ${formatINR(100)} now, the rest at delivery.`, icon: Tag }] : [{ title: 'Pay 50% advance online', detail: `Pay ${formatINR(advance)} now, the rest at delivery.`, icon: Tag }];
-  return <div className="checkout-section"><p className="form-step">03 / 04</p><h2>Choose a payment plan.</h2><p className="checkout-subtitle">{hasCustom ? 'Custom items require an online advance before production.' : 'The options below follow our server-side payment policy.'}</p><div className="payment-policy-note"><ShieldCheck size={17} /><span>{formatINR(total)} order · {hasCustom ? 'advance required for custom work' : total <= 300 ? 'COD or online available' : total <= 1000 ? 'COD needs a ₹100 advance' : '50% advance required above ₹1,000'}</span></div><div className="payment-options">{choices.map(({ title, detail, icon: PaymentIcon }, index) => <button className={`payment-option ${index === 0 ? 'is-selected' : ''}`} key={title}><div className="payment-icon"><PaymentIcon size={19} /></div><div><strong>{title}</strong><span>{detail}</span></div>{index === 0 && <Check size={16} />}</button>)}</div><div className="razorpay-strip"><span className="razorpay-mark">R</span><span>Secure payments by <strong>Razorpay</strong></span><Badge tone="icy">UPI · Cards · Netbanking</Badge></div></div>;
+  return <div className="checkout-section"><p className="form-step">03 / 04</p><h2>Pay a 50% advance.</h2><p className="checkout-subtitle">Place your order, then use the studio’s UPI QR code. We’ll begin once we verify the payment.</p><div className="payment-policy-note"><ShieldCheck size={17} /><span>{formatINR(total)} order · {formatINR(advance)} advance now · {formatINR(total - advance)} balance at handover</span></div><div className="payment-options"><div className="payment-option is-selected"><div className="payment-icon"><Tag size={19} /></div><div><strong>UPI QR · studio verified</strong><span>{settings.upiId ? `Pay to ${settings.upiId}` : 'QR and payment instructions appear after you place the order.'}</span></div><Check size={16} /></div></div><div className="payment-policy-note" style={{ marginTop: 12 }}>{settings.paymentInstructions || 'The studio will confirm when your advance arrives.'}</div></div>;
 }
 
 function CheckoutReview({ contact, delivery }) {
@@ -517,12 +574,72 @@ function CheckoutReview({ contact, delivery }) {
 
 function AccountPage() {
   const [tab, setTab] = useState('Orders');
+  const [requestList, setRequestList] = useState([]);
   const tabs = ['Orders', 'Custom Requests', 'Wishlist', 'Addresses', 'Profile'];
   const live = useLive();
   const products = live?.products?.length ? live.products : mockProducts;
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  useEffect(() => {
+    fetch('/api/custom-requests/mine', { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => response.ok ? response.json() : null).then((data) => setRequestList(data?.requests || [])).catch(() => {});
+  }, [token]);
   const displayName = user?.name || 'Lovely human';
-  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && <span>3</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your recent orders</p><h2>Little things, on their way.</h2></div><Link to="/track-order">Track an order <ArrowUpRight size={15} /></Link></div><div className="account-order-list">{sampleOrders.slice(0, 2).map((order) => <GlassCard className="account-order-card" key={order.id}><div className="order-card-top"><div><Badge tone={order.status === 'IN PRODUCTION' ? 'blush' : 'icy'}>{order.status}</Badge><span className="order-number">{order.id}</span></div><strong>{formatINR(order.total)}</strong></div><div className="order-card-main"><img src={products.find((product) => product.name === order.item)?.image || media.product1} alt="" /><div><h3>{order.item}</h3><p>Placed {order.date} · {order.payment.toLowerCase()}</p><Timeline compact /></div></div><div className="order-card-bottom"><span><MapPin size={15} /> {order.location || 'Muradnagar delivery'} {order.locationApproval === 'PENDING' && <Badge tone="soft">Approval pending</Badge>}</span><span>{order.balanceDue ? `${formatINR(order.balanceDue)} balance due` : 'Paid in full'}</span><Link to="/track-order">View details <ArrowRight size={15} /></Link></div>{order.status === 'CONFIRMED' && <button className="cancel-order-link">Cancel order · refund suggestion shown before confirming</button>}</GlassCard>)}</div></div>}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{sampleRequests.slice(0, 2).map((request) => <GlassCard className="request-row" key={request.id}><img src={request.image} alt="" /><div><Badge tone={request.status === 'QUOTE SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy}</p>{request.status === 'QUOTE SENT' && <div className="quote-action-row"><strong>Quote: ₹2,500 · 50% advance</strong><button>Accept</button><button>Decline</button></div>}</div><ArrowRight size={17} /></GlassCard>)}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div><div className="product-grid">{products.slice(0, 3).map((product) => <ProductCard product={product} key={product.id} onAdd={useApp().addToCart} onWish={useApp().onWish} isWished />)}</div></div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={tab === 'Addresses' ? (user?.name || 'Customer') : (user?.name || 'Customer')} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || '+91 98 7654 3210'} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? 'Civil Lines, Muradnagar' : (user?.email || 'user@example.com')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && <span>3</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your recent orders</p><h2>Little things, on their way.</h2></div><Link to="/track-order">Track an order <ArrowUpRight size={15} /></Link></div><div className="account-order-list">{sampleOrders.slice(0, 2).map((order) => <GlassCard className="account-order-card" key={order.id}><div className="order-card-top"><div><Badge tone={order.status === 'IN PRODUCTION' ? 'blush' : 'icy'}>{order.status}</Badge><span className="order-number">{order.id}</span></div><strong>{formatINR(order.total)}</strong></div><div className="order-card-main"><img src={products.find((product) => product.name === order.item)?.image || media.product1} alt="" /><div><h3>{order.item}</h3><p>Placed {order.date} · {order.payment.toLowerCase()}</p><Timeline compact /></div></div><div className="order-card-bottom"><span><MapPin size={15} /> {order.location || 'Muradnagar delivery'} {order.locationApproval === 'PENDING' && <Badge tone="soft">Approval pending</Badge>}</span><span>{order.balanceDue ? `${formatINR(order.balanceDue)} balance due` : 'Paid in full'}</span><Link to="/track-order">View details <ArrowRight size={15} /></Link></div>{order.status === 'CONFIRMED' && <button className="cancel-order-link">Cancel order · refund suggestion shown before confirming</button>}</GlassCard>)}</div></div>}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{requestList.length ? requestList.map((request) => <GlassCard className="request-row" key={request.id}><img src={media.collage} alt="" /><div><Badge tone={request.status === 'QUOTE_SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy || 'Not set'} · Phone {request.phone || user?.phone || '—'}</p>{request.quote?.amount && <strong>Quote: {formatINR(Number(request.quote.amount))}</strong>}<Link to={`/account/requests/${request.id}`} style={{ display: 'inline-flex', gap: 6, marginTop: 8 }}>Open request chat <ArrowRight size={14} /></Link></div></GlassCard>) : <EmptyState title="No custom requests yet" body="Send an idea and we’ll keep the conversation here." />}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div><div className="product-grid">{products.slice(0, 3).map((product) => <ProductCard product={product} key={product.id} onAdd={useApp().addToCart} onWish={useApp().onWish} isWished />)}</div></div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={tab === 'Addresses' ? (user?.name || 'Customer') : (user?.name || 'Customer')} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || '+91 98 7654 3210'} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? 'Civil Lines, Muradnagar' : (user?.email || 'user@example.com')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+}
+
+function RequestConversationPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { token } = useAuth();
+  const [request, setRequest] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [acceptedOrder, setAcceptedOrder] = useState(null);
+  const load = async () => {
+    setLoading(true); setError('');
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [requestResponse, messagesResponse] = await Promise.all([
+        fetch(`/api/custom-requests/${id}`, { headers }), fetch(`/api/conversations/request/${id}`, { headers }),
+      ]);
+      const requestData = await requestResponse.json().catch(() => ({}));
+      const messageData = await messagesResponse.json().catch(() => ({}));
+      if (!requestResponse.ok) throw new Error(requestData.message || 'Could not load this request.');
+      if (!messagesResponse.ok) throw new Error(messageData.message || 'Could not load this conversation.');
+      setRequest(requestData.request); setMessages(messageData.messages || []);
+    } catch (err) { setError(err.message || 'Could not load request.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [id, token]);
+  const send = async (event) => {
+    event.preventDefault();
+    const message = text.trim();
+    if (!message) return;
+    try {
+      const response = await fetch(`/api/conversations/request/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ message }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Message could not be sent.');
+      setText(''); setMessages((items) => [...items, data.message]); setError('');
+    } catch (err) { setError(err.message || 'Message could not be sent.'); }
+  };
+  const acceptQuote = async () => {
+    try {
+      const response = await fetch(`/api/custom-requests/${id}/accept-quote`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not accept quote.');
+      setAcceptedOrder(data.order); setError('');
+      navigate(`/track-order?order=${encodeURIComponent(data.order.id)}`);
+    } catch (err) { setError(err.message || 'Could not accept quote.'); }
+  };
+  return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} /><main className="container track-page"><section className="track-card" style={{ maxWidth: 760, textAlign: 'left' }}><p className="eyebrow">Your custom idea</p><h1 style={{ fontSize: 48 }}>{request?.title || 'Request chat'}</h1><p>{id} · {request?.status || 'Loading'}</p>
+    {request?.referenceUrls?.length > 0 && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0' }}>{request.referenceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: '#995f83', fontSize: 13 }}>Open reference {index + 1} ↗</a>)}</div>}
+    {request?.quote && <GlassCard style={{ padding: 16, marginBottom: 16 }}><strong>Studio quote</strong><p style={{ margin: '6px 0 0' }}>{formatINR(Number(request.quote.amount || request.quote.total || 0))} · {request.quote.note || request.quote.message || 'Reply here if you have questions.'}</p>{request.status === 'QUOTE_SENT' && <Button onClick={acceptQuote} style={{ marginTop: 12 }}>Accept quote · pay 50% advance</Button>}{acceptedOrder && <p>Order {acceptedOrder.id} created. <Link to={`/track-order?order=${acceptedOrder.id}`}>Open order tracker</Link></p>}</GlassCard>}
+    {loading ? <p>Loading your conversation…</p> : <div style={{ display: 'grid', gap: 10, padding: 14, maxHeight: 420, overflowY: 'auto', borderRadius: 16, background: 'rgba(255,255,255,.62)' }}>{messages.length ? messages.map((message) => <div key={message.id} style={{ justifySelf: message.senderRole === 'CUSTOMER' ? 'end' : 'start', maxWidth: '88%', padding: '12px 14px', borderRadius: 14, background: message.senderRole === 'CUSTOMER' ? 'rgba(255,175,204,.22)' : 'rgba(62,142,126,.1)' }}><small>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {new Date(message.createdAt).toLocaleString()}</small><p style={{ margin: '5px 0 0', whiteSpace: 'pre-wrap' }}>{message.message}</p></div>) : <p style={{ margin: 0, color: 'var(--muted)' }}>Your idea is in the studio inbox. Send a message here any time.</p>}</div>}
+    {error && <div role="alert" style={{ marginTop: 12, color: '#c55a83' }}>{error}</div>}
+    <form onSubmit={send} style={{ display: 'grid', gap: 10, marginTop: 16 }}><label className="floating-field floating-textarea"><textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder=" " /><span>Write a message to the studio…</span></label><Button type="submit" className="full-button" icon={<Send size={15} />}>Send message</Button></form>
+  </section></main><Footer /></GradientBackground>;
 }
 
 function TrackOrderPage() {
@@ -531,24 +648,26 @@ function TrackOrderPage() {
   const [tracked, setTracked] = useState(null);
   const [error, setError] = useState('');
   const [queryText, setQueryText] = useState('');
-  const [queries, setQueries] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [queryMsg, setQueryMsg] = useState({ type: '', text: '' });
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
   const live = useLive();
   const products = live?.products?.length ? live.products : mockProducts;
 
-  const fetchQueries = async (id) => {
+  const fetchMessages = async (id) => {
     try {
-      const res = await fetch(`/api/orders/${id}/queries`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/conversations/order/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        setQueries(data.queries || []);
+        setMessages(data.messages || []);
       }
     } catch {}
   };
 
   const handleTrack = async (e) => {
     e.preventDefault();
-    setError(''); setTracked(null); setQueries([]); setQueryMsg({ type: '', text: '' });
+    setError(''); setTracked(null); setMessages([]); setQueryMsg({ type: '', text: '' });
     if (!orderId.trim()) return setError('Please enter your order number.');
     try {
       const res = await fetch(`/api/orders/${orderId.trim()}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -558,7 +677,8 @@ function TrackOrderPage() {
       }
       const data = await res.json();
       setTracked(data.order);
-      fetchQueries(orderId.trim());
+      setPaymentAmount(String(data.order.balanceDue || data.order.balance_due || data.order.advanceDue || data.order.advance_due || Math.ceil(Number(data.order.total || 0) / 2)));
+      fetchMessages(orderId.trim());
     } catch (err) { setError(err.message || 'Could not find that order.'); }
   };
 
@@ -567,15 +687,26 @@ function TrackOrderPage() {
     setQueryMsg({ type: '', text: '' });
     if (!queryText.trim()) return setQueryMsg({ type: 'error', text: 'Please type your question first.' });
     try {
-      const res = await fetch(`/api/orders/${tracked.id}/queries`, {
+      const res = await fetch(`/api/conversations/order/${tracked.id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ message: queryText.trim() }),
       });
-      if (!res.ok) throw new Error('Failed to send query.');
+      const responseData = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(responseData.message || 'Failed to send message.');
       setQueryText('');
-      setQueryMsg({ type: 'success', text: 'Your query has been sent. We will reply soon.' });
-      await fetchQueries(tracked.id);
-    } catch (err) { setQueryMsg({ type: 'error', text: err.message || 'Could not send query.' }); }
+      setQueryMsg({ type: 'success', text: 'Your message has been sent.' });
+      await fetchMessages(tracked.id);
+    } catch (err) { setQueryMsg({ type: 'error', text: err.message || 'Could not send message.' }); }
+  };
+
+  const handlePaymentReport = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`/api/orders/${tracked.id}/payment-report`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ amount: Number(paymentAmount), reference: paymentReference }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Could not report payment.');
+      setTracked(data.order); setQueryMsg({ type: 'success', text: 'Payment reported. The studio will verify it before changing your paid balance.' });
+    } catch (err) { setQueryMsg({ type: 'error', text: err.message || 'Could not report payment.' }); }
   };
 
   const est = tracked?.estimatedDate || tracked?.estimated_date;
@@ -604,6 +735,11 @@ function TrackOrderPage() {
           <strong>{formatINR(Number(tracked.total || 0))}</strong>
         </div>
 
+        <GlassCard style={{ marginTop: 18, padding: '18px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div><p className="eyebrow" style={{ marginBottom: 4 }}>Payment tracking</p><strong>{tracked.paymentStatus || tracked.payment_status || 'PENDING'}</strong><p style={{ margin: '5px 0 0', color: 'var(--muted)', fontSize: 13 }}>Paid {formatINR(Number(tracked.paidAmount || tracked.paid_amount || 0))} · Remaining {formatINR(Math.max(0, Number(tracked.total || 0) - Number(tracked.paidAmount || tracked.paid_amount || 0)))}</p></div></div>
+          {!['PAID', 'AWAITING_VERIFICATION'].includes(tracked.paymentStatus || tracked.payment_status) && <form onSubmit={handlePaymentReport} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 12 }}><input type="number" min="1" max={Math.max(1, Number(tracked.balanceDue || tracked.balance_due || tracked.total || 0))} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Amount sent" style={{ padding: 9, border: '1px solid var(--line)', borderRadius: 9 }} /><input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UPI reference (optional)" style={{ padding: 9, border: '1px solid var(--line)', borderRadius: 9 }} /><button className="button button-mini">I’ve paid</button></form>}
+        </GlassCard>
+
         <GlassCard style={{ marginTop: 18, padding: '20px 22px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(62,142,126,.1)', color: '#3e8e7e', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -622,21 +758,17 @@ function TrackOrderPage() {
         </GlassCard>
 
         {/* Past queries & replies */}
-        {queries.length > 0 && (
+        {messages.length > 0 && (
           <div style={{ marginTop: 22 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <p className="eyebrow" style={{ margin: 0 }}>Your past queries</p>
-              <Badge tone="icy">{queries.length}</Badge>
+              <p className="eyebrow" style={{ margin: 0 }}>Your conversation with the studio</p>
+              <Badge tone="icy">{messages.length}</Badge>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
-              {queries.map((q) => (
-                <div key={q.id} style={{ padding: '12px 14px', borderRadius: 14, background: 'rgba(90,63,86,.04)', border: '1px solid rgba(90,63,86,.08)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <small style={{ fontSize: 11, color: 'var(--muted)' }}>{new Date(q.createdAt || q.created_at).toLocaleString()}</small>
-                    <Badge tone={q.status === 'REPLIED' ? 'icy' : 'soft'}>{q.status === 'REPLIED' ? 'Replied' : 'Pending'}</Badge>
-                  </div>
-                  <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--ink)' }}><strong>You:</strong> {q.message}</p>
-                  {q.adminReply && <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(62,142,126,.08)', marginTop: 8 }}><small style={{ color: '#3e8e7e', fontSize: 11, fontWeight: 600 }}>Studio reply · {new Date(q.repliedAt || q.replied_at || Date.now()).toLocaleDateString()}</small><p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink)' }}>{q.adminReply}</p></div>}
+              {messages.map((message) => (
+                <div key={message.id} style={{ justifySelf: message.senderRole === 'CUSTOMER' ? 'end' : 'start', maxWidth: '88%', padding: '12px 14px', borderRadius: 14, background: message.senderRole === 'CUSTOMER' ? 'rgba(255,175,204,.2)' : 'rgba(62,142,126,.1)', border: '1px solid rgba(90,63,86,.08)' }}>
+                  <small style={{ fontSize: 11, color: 'var(--muted)' }}>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {new Date(message.createdAt).toLocaleString()}</small>
+                  <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{message.message}</p>
                 </div>
               ))}
             </div>
@@ -650,19 +782,19 @@ function TrackOrderPage() {
               <MessageCircle size={16} />
             </div>
             <div style={{ flex: 1 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Fraunces', serif" }}>Ask a Query</h3>
+              <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Fraunces', serif" }}>Message the studio</h3>
               <p style={{ margin: '2px 0 0', color: 'var(--muted)', fontSize: 12.5 }}>
-                Questions about preparation progress, packing details, delivery timeline, customization tweaks, or anything else about your order — our team typically replies within 24 hours on business days.
+                Ask about this order or request an addition. Your conversation stays attached to the order.
               </p>
             </div>
           </div>
           <form onSubmit={handleQuery} style={{ display: 'grid', gap: 10 }}>
             <label className="floating-field floating-textarea">
               <textarea required placeholder=" " rows={3} value={queryText} onChange={(e) => setQueryText(e.target.value)} />
-              <span>Type your question about this order…</span>
+              <span>Write a message about this order…</span>
             </label>
             {queryMsg.text && <div style={{ padding: '8px 12px', borderRadius: 10, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, background: queryMsg.type === 'error' ? 'rgba(197,90,131,.1)' : 'rgba(62,142,126,.1)', border: `1px solid ${queryMsg.type === 'error' ? 'rgba(197,90,131,.25)' : 'rgba(62,142,126,.25)'}`, color: queryMsg.type === 'error' ? '#c55a83' : '#3e8e7e' }}>{queryMsg.type === 'error' ? <AlertCircle size={13} /> : <Check size={13} />}{queryMsg.text}</div>}
-            <Button type="submit" className="full-button" icon={<Send size={14} />}>Send query to studio</Button>
+            <Button type="submit" className="full-button" icon={<Send size={14} />}>Send message</Button>
           </form>
         </div>
       </motion.div>}
@@ -701,7 +833,7 @@ function AdminProductsPanel() {
   const [formMsg, setFormMsg] = useState({ type: '', text: '' });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [form, setForm] = useState({
-    name: '', slug: '', category: '', type: 'READYMADE', price: '', originalPrice: '', badge: 'New',
+    name: '', slug: '', category: '', type: 'READYMADE', price: '', originalPrice: '', saleStartsAt: '', saleEndsAt: '', badge: 'New',
     production: 'Ready in 3 days', description: '', audience: 'her', disclaimer: 'Each piece is unique and may vary slightly.',
     careInstructions: 'Keep dry, away from direct sunlight for long hours.', image: '',
     occasions: [], customizable: false, returnable: true, allowCustomRequest: true, premium: false, isActive: true,
@@ -739,7 +871,7 @@ function AdminProductsPanel() {
   const openCreate = () => {
     setEditing(null);
     setForm({
-      name: '', slug: '', category: cats[0]?.slug || cats[0]?.id || '', type: 'READYMADE', price: '', originalPrice: '', badge: 'New',
+      name: '', slug: '', category: cats[0]?.slug || cats[0]?.id || '', type: 'READYMADE', price: '', originalPrice: '', saleStartsAt: '', saleEndsAt: '', badge: 'New',
       production: 'Ready in 3 days', description: '', audience: 'her', disclaimer: 'Each piece is unique and may vary slightly.',
       careInstructions: 'Keep dry, away from direct sunlight for long hours.', image: '',
       occasions: [], customizable: false, returnable: true, allowCustomRequest: true, premium: false, isActive: true,
@@ -752,6 +884,7 @@ function AdminProductsPanel() {
     setForm({
       name: p.name || '', slug: p.slug || '', category: p.category || '', type: p.type || 'READYMADE',
       price: p.price != null ? String(p.price) : '', originalPrice: p.originalPrice != null ? String(p.originalPrice) : '',
+      saleStartsAt: p.saleStartsAt ? String(p.saleStartsAt).slice(0, 16) : '', saleEndsAt: p.saleEndsAt ? String(p.saleEndsAt).slice(0, 16) : '',
       badge: p.badge || 'New', production: p.production || 'Ready in 3 days', description: p.description || '',
       audience: p.audience || 'her', disclaimer: p.disclaimer || '',
       careInstructions: p.careInstructions || '', image: p.image || '',
@@ -771,6 +904,8 @@ function AdminProductsPanel() {
       const payload = { ...form };
       if (payload.price) payload.price = Number(payload.price);
       if (payload.originalPrice) payload.originalPrice = Number(payload.originalPrice);
+      payload.saleStartsAt = payload.saleStartsAt || null;
+      payload.saleEndsAt = payload.saleEndsAt || null;
       let imageUrl = payload.image || '';
       if (payload.image && payload.image.startsWith('data:image')) {
         try {
@@ -895,7 +1030,7 @@ function AdminProductsPanel() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
               <label className="floating-field">
                 <input required type="number" min="0" placeholder=" " value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-                <span>Price (₹)</span>
+                <span>Sale price (₹)</span>
               </label>
               <label className="floating-field">
                 <input type="number" min="0" placeholder=" " value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} />
@@ -909,6 +1044,11 @@ function AdminProductsPanel() {
                 <input placeholder=" " value={form.production} onChange={(e) => setForm({ ...form, production: e.target.value })} />
                 <span>Production text</span>
               </label>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 14, borderRadius: 14, background: 'rgba(255,175,204,.12)', border: '1px solid rgba(197,90,131,.12)' }}>
+              <label className="floating-field"><input type="datetime-local" value={form.saleStartsAt} onChange={(e) => setForm({ ...form, saleStartsAt: e.target.value })} /><span>Discount starts</span></label>
+              <label className="floating-field"><input type="datetime-local" value={form.saleEndsAt} onChange={(e) => setForm({ ...form, saleEndsAt: e.target.value })} /><span>Discount ends</span></label>
+              <small style={{ gridColumn: '1 / -1', color: 'var(--muted)', fontSize: 11 }}>Set the original price and a lower sale price above. Leave dates blank for a discount with no schedule.</small>
             </div>
             <label className="floating-field floating-textarea">
               <textarea rows="3" placeholder=" " value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -1204,6 +1344,7 @@ function AdminOrdersPanel() {
   const [msg, setMsg] = useState({ type: '', text: '' });
   const [search, setSearch] = useState('');
   const [editingEst, setEditingEst] = useState({});
+  const [paymentDraft, setPaymentDraft] = useState({});
 
   const req = async (method, url, body) => {
     const res = await fetch(url, {
@@ -1230,6 +1371,16 @@ function AdminOrdersPanel() {
       setOrders((list) => list.map((o) => o.id === orderId ? { ...o, estimatedDate: val || null, estimated_date: val || null } : o));
       setEditingEst((e) => { const n = { ...e }; delete n[orderId]; return n; });
     } catch (err) { setMsg({ type: 'error', text: err.message || 'Save failed.' }); }
+  };
+
+  const recordPayment = async (order) => {
+    const draft = paymentDraft[order.id] || {};
+    try {
+      const result = await req('POST', `/api/admin/orders/${order.id}/payments`, { amount: Number(draft.amount), method: draft.method || 'UPI', reference: draft.reference || '' });
+      setOrders((list) => list.map((item) => item.id === order.id ? { ...item, paidAmount: result.order.paid_amount ?? result.order.paidAmount, balanceDue: result.order.balance_due ?? result.order.balanceDue, paymentStatus: result.order.payment_status ?? result.order.paymentStatus } : item));
+      setPaymentDraft((state) => ({ ...state, [order.id]: { amount: '', method: draft.method || 'UPI', reference: '' } }));
+      setMsg({ type: 'success', text: `Payment recorded for ${order.id}.` });
+    } catch (err) { setMsg({ type: 'error', text: err.message || 'Could not record payment.' }); }
   };
 
   const filtered = orders.filter((o) => !search || `${o.id} ${o.customer?.name || ''} ${o.customer?.phone || ''}`.toLowerCase().includes(search.toLowerCase()));
@@ -1266,7 +1417,7 @@ function AdminOrdersPanel() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 2fr) minmax(120px, 1fr) 220px 180px', gap: 14, alignItems: 'center' }}>
                   <div>
                     <strong style={{ color: 'var(--ink)', fontSize: 14 }}>{order.id}</strong>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{cust.name || '—'} · {cust.phone || cust.email || '—'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{cust.name || order.customer || '—'} · {cust.phone || order.phone || order.customer_phone || '—'} { (cust.phone || order.phone || order.customer_phone) && <a href={`tel:${cust.phone || order.phone || order.customer_phone}`} aria-label="Call customer" style={{ marginLeft: 8, color: '#995f83' }}><PhoneCall size={13} /></a>}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>{deliv.method === 'home' ? 'Home delivery' : 'Campus handover'} · {deliv.pickupDate || deliv.pickup_date || 'No pickup date'}</div>
                   </div>
                   <Badge tone={['DELIVERED','PAID','CONFIRMED'].includes(order.status) ? 'icy' : 'blush'}>{order.status}</Badge>
@@ -1284,6 +1435,16 @@ function AdminOrdersPanel() {
                     )}
                   </div>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                  <Badge tone={order.paymentStatus === 'PAID' ? 'icy' : 'blush'}>{order.paymentStatus || 'PENDING'}</Badge>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>Paid {formatINR(Number(order.paidAmount || 0))} · Balance {formatINR(Math.max(0, Number(order.total || 0) - Number(order.paidAmount || 0)))} · Total {formatINR(Number(order.total || 0))}{Number(order.reportedAmount || order.reported_amount) > 0 ? ` · Customer reports ${formatINR(Number(order.reportedAmount || order.reported_amount))}${order.reportedReference || order.reported_reference ? ` · Ref ${order.reportedReference || order.reported_reference}` : ''}` : ''}</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                    <input type="number" min="1" max={Math.max(1, Number(order.total || 0) - Number(order.paidAmount || 0))} placeholder="Amount received ₹" value={paymentDraft[order.id]?.amount || ''} onChange={(e) => setPaymentDraft((state) => ({ ...state, [order.id]: { ...state[order.id], amount: e.target.value } }))} style={{ width: 150, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)' }} />
+                    <select value={paymentDraft[order.id]?.method || 'UPI'} onChange={(e) => setPaymentDraft((state) => ({ ...state, [order.id]: { ...state[order.id], method: e.target.value } }))} style={{ padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)' }}><option value="UPI">UPI</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="OTHER">Other</option></select>
+                    <input placeholder="Reference (optional)" value={paymentDraft[order.id]?.reference || ''} onChange={(e) => setPaymentDraft((state) => ({ ...state, [order.id]: { ...state[order.id], reference: e.target.value } }))} style={{ width: 150, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)' }} />
+                    <button className="button button-mini" disabled={!Number(paymentDraft[order.id]?.amount)} onClick={() => recordPayment(order)}>Record payment</button>
+                  </div>
+                </div>
               </div>;
             })}
           </div>
@@ -1293,97 +1454,187 @@ function AdminOrdersPanel() {
   </div>;
 }
 
-function AdminOrderQueriesPanel() {
+function AdminConversationsPanel() {
   const adminToken = localStorage.getItem('efu_admin_token') || '';
-  const [queries, setQueries] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [requestDetail, setRequestDetail] = useState(null);
+  const [orderDetail, setOrderDetail] = useState(null);
+  const [draft, setDraft] = useState('');
+  const [quoteAmount, setQuoteAmount] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState({ type: '', text: '' });
-  const [replies, setReplies] = useState({});
-
   const req = async (method, url, body) => {
-    const res = await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || data.error || `Failed (${res.status})`);
+    const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.error || `Request failed (${response.status})`);
     return data;
   };
-  const refresh = async () => {
+  const refreshList = async () => {
     setLoading(true);
-    try { const r = await req('GET', '/api/admin/order-queries'); setQueries(r.queries || []); }
-    catch (err) { setMsg({ type: 'error', text: err.message || 'Failed to load queries.' }); }
+    try { const data = await req('GET', '/api/admin/conversations'); setConversations(data.conversations || []); }
+    catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
-  useEffect(() => { refresh(); }, []);
-
-  const sendReply = async (qid) => {
-    const text = String(replies[qid] || '').trim();
-    if (!text) return;
+  const refreshThread = async (thread) => {
+    if (!thread) return;
     try {
-      const r = await req('PATCH', `/api/admin/order-queries/${qid}/reply`, { reply: text });
-      setMsg({ type: 'success', text: `Reply sent for query on ${r.query?.orderId || qid}.` });
-      setQueries((list) => list.map((q) => q.id === qid ? { ...q, adminReply: r.query?.adminReply || text, repliedAt: r.query?.repliedAt || new Date().toISOString(), status: 'REPLIED' } : q));
-      setReplies((rr) => { const n = { ...rr }; delete n[qid]; return n; });
-    } catch (err) { setMsg({ type: 'error', text: err.message || 'Reply failed.' }); }
+      const kind = thread.conversationType.toLowerCase();
+      const data = await req('GET', `/api/admin/conversations/${kind}/${thread.entityId}`);
+      setMessages(data.messages || []);
+      if (kind === 'request') {
+        const requestData = await req('GET', `/api/admin/custom-requests/${thread.entityId}`);
+        setRequestDetail(requestData.request);
+        setQuoteAmount(requestData.request?.quote?.amount ? String(requestData.request.quote.amount) : '');
+        setOrderDetail(null);
+      } else {
+        const orderData = await req('GET', `/api/admin/orders/${thread.entityId}`);
+        setOrderDetail(orderData.order); setRequestDetail(null);
+      }
+    } catch (err) { setError(err.message); }
   };
-
+  useEffect(() => { refreshList(); }, []);
+  useEffect(() => { refreshThread(selected); }, [selected]);
+  useEffect(() => {
+    if (!selected) return undefined;
+    const timer = window.setInterval(() => refreshThread(selected), 8000);
+    return () => window.clearInterval(timer);
+  }, [selected]);
+  const send = async (event) => {
+    event.preventDefault();
+    if (!draft.trim() || !selected) return;
+    try {
+      const data = await req('POST', `/api/admin/conversations/${selected.conversationType.toLowerCase()}/${selected.entityId}`, { message: draft.trim() });
+      setMessages((items) => [...items, data.message]); setDraft(''); setError(''); refreshList();
+    } catch (err) { setError(err.message); }
+  };
+  const sendQuote = async () => {
+    const amount = Number(quoteAmount);
+    if (!selected || !Number.isSafeInteger(amount) || amount < 1) return setError('Enter a valid quote amount.');
+    try {
+      const message = `Your quote is ${formatINR(amount)}. A 50% advance (${formatINR(Math.ceil(amount / 2))}) is due before we begin. Reply here if you have any questions.`;
+      await req('PATCH', `/api/admin/custom-requests/${selected.entityId}/status`, { status: 'QUOTE_SENT', quote: { amount, advance: Math.ceil(amount / 2), note: '' } });
+      const result = await req('POST', `/api/admin/conversations/request/${selected.entityId}`, { message });
+      setMessages((items) => [...items, result.message]); setError(''); refreshThread(selected); refreshList();
+    } catch (err) { setError(err.message); }
+  };
+  const clearThread = async () => {
+    if (!selected || !window.confirm('Delete this conversation and its request reference files? The order and payment record will stay.')) return;
+    try {
+      await req('DELETE', `/api/admin/conversations/${selected.conversationType.toLowerCase()}/${selected.entityId}`);
+      setMessages([]); setSelected(null); setRequestDetail(null); setError(''); await refreshList();
+    } catch (err) { setError(err.message); }
+  };
+  const markComplete = async () => {
+    if (!selected) return;
+    try {
+      if (selected.conversationType === 'ORDER') await req('PATCH', `/api/admin/orders/${selected.entityId}/status`, { status: 'DELIVERED' });
+      else await req('PATCH', `/api/admin/custom-requests/${selected.entityId}/status`, { status: 'COMPLETED' });
+      await refreshThread(selected); setError('');
+    } catch (err) { setError(err.message); }
+  };
   return <div className="ops-section">
-    <div className="ops-toolbar">
-      <span className="ops-toolbar-note"><MessageCircle size={15} /> {queries.length} order quer{queries.length === 1 ? 'y' : 'ies'} · customer questions about prep, packing, delivery, customization</span>
-      <button className="small-link" onClick={refresh}><RefreshCw size={13} /> Refresh</button>
+    <div className="ops-toolbar"><span className="ops-toolbar-note"><MessageCircle size={15} /> Customer chats for custom requests and orders</span><button className="small-link" onClick={refreshList}><RefreshCw size={13} /> Refresh inbox</button></div>
+    {error && <div role="alert" style={{ marginBottom: 12, padding: 10, borderRadius: 10, background: 'rgba(197,90,131,.1)', color: '#c55a83' }}>{error}</div>}
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, .75fr) minmax(0, 1.7fr)', gap: 14, minHeight: 500 }}>
+      <GlassCard style={{ padding: 10, overflowY: 'auto' }}>{loading ? <p style={{ padding: 12 }}>Loading inbox…</p> : conversations.length ? conversations.map((item) => <button key={`${item.conversationType}:${item.entityId}`} onClick={() => setSelected(item)} style={{ width: '100%', display: 'block', textAlign: 'left', border: 0, borderRadius: 12, padding: 13, marginBottom: 5, background: selected?.entityId === item.entityId ? 'rgba(255,175,204,.2)' : 'transparent', cursor: 'pointer', color: 'var(--ink)' }}><Badge tone={item.conversationType === 'REQUEST' ? 'blush' : 'icy'}>{item.conversationType}</Badge><strong style={{ display: 'block', marginTop: 8 }}>{item.customerName || 'Customer'} · {item.entityId}</strong><small style={{ color: 'var(--muted)' }}>{item.lastMessage}</small><span style={{ display: 'block', marginTop: 5, fontSize: 12 }}>{item.customerPhone ? <a href={`tel:${item.customerPhone}`} onClick={(e) => e.stopPropagation()}><PhoneCall size={12} /> {item.customerPhone}</a> : 'No phone number'}</span></button>) : <EmptyState title="No conversations yet" body="New request and order messages will show up here." />}</GlassCard>
+      <GlassCard style={{ padding: 18, display: 'flex', flexDirection: 'column', minWidth: 0 }}>{selected ? <>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 12, borderBottom: '1px solid var(--line)' }}><div><p className="eyebrow" style={{ marginBottom: 4 }}>{selected.conversationType} · {selected.entityId}</p><h2 style={{ margin: 0 }}>{selected.customerName || 'Customer'}</h2>{selected.customerPhone && <a href={`tel:${selected.customerPhone}`}><PhoneCall size={13} /> Call {selected.customerPhone}</a>}<small style={{ display: 'block', color: 'var(--muted)', marginTop: 4 }}>Status: {requestDetail?.status || orderDetail?.status || '—'}</small></div><div style={{ display: 'grid', justifyItems: 'end', gap: 8 }}><button className="small-link" onClick={() => refreshThread(selected)}><RefreshCw size={13} /> Refresh</button>{(selected.conversationType === 'ORDER' ? orderDetail?.status !== 'DELIVERED' : requestDetail?.status !== 'COMPLETED') && <button className="small-link" onClick={markComplete}><Check size={13} /> Mark complete</button>}</div></div>
+        {requestDetail?.referenceUrls?.length > 0 && <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', padding: '12px 0' }}>{requestDetail.referenceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: '#995f83', fontSize: 12 }}>View customer reference {index + 1} ↗</a>)}</div>}
+        {requestDetail && <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}><input type="number" min="1" placeholder="Quote amount ₹" value={quoteAmount} onChange={(e) => setQuoteAmount(e.target.value)} style={{ flex: 1, padding: 9, border: '1px solid var(--line)', borderRadius: 10 }} /><button className="button button-mini" onClick={sendQuote}>Send 50% advance quote</button></div>}
+        <div style={{ flex: 1, minHeight: 180, maxHeight: 350, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 9, padding: 8, background: 'rgba(90,63,86,.035)', borderRadius: 14 }}>{messages.map((message) => <div key={message.id} style={{ justifySelf: message.senderRole === 'ADMIN' ? 'end' : 'start', maxWidth: '88%', padding: '10px 13px', borderRadius: 13, background: message.senderRole === 'ADMIN' ? 'rgba(62,142,126,.12)' : '#fff' }}><small style={{ color: 'var(--muted)' }}>{message.senderRole === 'ADMIN' ? 'Studio' : 'Customer'} · {new Date(message.createdAt).toLocaleString()}</small><p style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{message.message}</p></div>)}</div>
+        <form onSubmit={send} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12 }}><textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Reply to the customer…" style={{ resize: 'vertical', padding: 10, border: '1px solid var(--line)', borderRadius: 10, font: 'inherit' }} /><button className="button button-mini" disabled={!draft.trim()}><Send size={13} /> Send reply</button></form>
+        <button className="small-link" onClick={clearThread} style={{ alignSelf: 'flex-end', marginTop: 10, color: '#995f83' }}><Trash2 size={13} /> Delete chat and reference files after completion</button>
+      </> : <EmptyState title="Choose a conversation" body="Select a customer from the inbox to review their message and reply." />}</GlassCard>
     </div>
-    {msg.text && (
-      <div style={{ padding: '10px 14px', borderRadius: 12, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
-        background: msg.type === 'error' ? 'rgba(197,90,131,.1)' : 'rgba(62,142,126,.1)',
-        border: `1px solid ${msg.type === 'error' ? 'rgba(197,90,131,.25)' : 'rgba(62,142,126,.25)'}`,
-        color: msg.type === 'error' ? '#c55a83' : '#3e8e7e' }}>
-        {msg.type === 'error' ? <AlertCircle size={15} /> : <Check size={15} />}
-        <span>{msg.text}</span>
-      </div>
-    )}
-    {loading ? <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading queries…</div> :
-      queries.length ? (
-        <div style={{ display: 'grid', gap: 14 }}>
-          {queries.map((q) => (
-            <GlassCard key={q.id} style={{ padding: '18px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div>
-                  <Badge tone={q.status === 'REPLIED' ? 'icy' : 'blush'}>{q.status || 'PENDING'}</Badge>
-                  <span style={{ marginLeft: 10, fontSize: 13, color: 'var(--muted)' }}>Order <strong style={{ color: 'var(--ink)' }}>{q.orderId || q.order_id}</strong> · user {q.userId || q.user_id || '—'}</span>
-                </div>
-                <small style={{ color: 'var(--muted)', fontSize: 11 }}>{new Date(q.createdAt || q.created_at || Date.now()).toLocaleString()}</small>
-              </div>
-              <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(90,63,86,.04)', marginBottom: q.adminReply ? 10 : 14 }}>
-                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink)' }}><strong>Customer:</strong> {q.message}</p>
-              </div>
-              {q.adminReply && (
-                <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(62,142,126,.08)', marginBottom: 12 }}>
-                  <small style={{ color: '#3e8e7e', fontSize: 11, fontWeight: 600 }}>Your reply · {new Date(q.repliedAt || q.replied_at || Date.now()).toLocaleDateString()}</small>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink)' }}>{q.adminReply}</p>
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
-                <textarea rows={2} value={replies[q.id] || ''} onChange={(e) => setReplies({ ...replies, [q.id]: e.target.value })}
-                  placeholder="Reply to this customer query (about preparation, packing, delivery, customization, etc.)…"
-                  style={{ width: '100%', resize: 'vertical', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(90,63,86,.15)', fontSize: 13, fontFamily: 'inherit' }} />
-                <button className="button button-mini" onClick={() => sendReply(q.id)} disabled={!String(replies[q.id] || '').trim()}>
-                  <Send size={13} /> Send reply
-                </button>
-              </div>
-            </GlassCard>
-          ))}
-        </div>
-      ) : <EmptyState title="No order queries yet" body="Customer questions sent from the Track Order page will appear here." />
-    }
   </div>;
 }
 
-function AdminOpsPanel({ tab }) {
+function AdminTeamPanel() {
+  const adminToken = localStorage.getItem('efu_admin_token') || '';
+  const [admins, setAdmins] = useState([]);
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const request = async (method, url, body) => {
+    const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: body ? JSON.stringify(body) : undefined });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || data.error || 'Request failed.');
+    return data;
+  };
+  const refresh = async () => { try { setAdmins((await request('GET', '/api/admin/team')).admins || []); } catch (err) { setError(err.message); } };
+  useEffect(() => { refresh(); }, []);
+  const create = async (event) => {
+    event.preventDefault(); setError(''); setMessage('');
+    try { await request('POST', '/api/admin/team', form); setForm({ name: '', email: '', phone: '', password: '' }); setMessage('Admin account added. They can sign in at /admin.'); await refresh(); }
+    catch (err) { setError(err.message); }
+  };
+  const toggle = async (admin) => {
+    try { await request('PATCH', `/api/admin/team/${admin.id}`, { isActive: !admin.isActive }); await refresh(); }
+    catch (err) { setError(err.message); }
+  };
+  return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><Users size={15} /> Add individual admin accounts. Only owners can manage this list.</span></div>{error && <div role="alert" style={{ color: '#c55a83', marginBottom: 12 }}>{error}</div>}{message && <div style={{ color: '#3e8e7e', marginBottom: 12 }}>{message}</div>}<GlassCard style={{ padding: 20, marginBottom: 14 }}><p className="eyebrow">Invite a teammate</p><form onSubmit={create} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}><input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /><input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><input placeholder="Phone (optional)" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /><input required type="password" minLength={10} placeholder="Temporary password (10+ characters)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><Button type="submit" icon={<UserPlus size={15} />}>Add admin</Button></form></GlassCard><div style={{ display: 'grid', gap: 10 }}>{admins.map((admin) => <GlassCard key={admin.id} style={{ padding: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}><div><strong>{admin.name}</strong><div style={{ color: 'var(--muted)', fontSize: 12 }}>{admin.email} · {admin.phone || 'No phone'} · {admin.role}</div></div><button className="small-link" onClick={() => toggle(admin)}>{admin.isActive ? 'Deactivate access' : 'Restore access'}</button></GlassCard>)}</div></div>;
+}
+
+function AdminPaymentSetupPanel() {
+  const adminToken = localStorage.getItem('efu_admin_token') || '';
+  const [form, setForm] = useState({ upiId: '', upiQrImage: '', paymentInstructions: 'Pay the requested amount by UPI. We will start after confirming it.' });
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    fetch('/api/settings/public').then((response) => response.json()).then((data) => setForm((current) => ({ ...current, ...(data.settings || {}) }))).catch(() => {});
+  }, []);
+  const uploadQr = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 4 * 1024 * 1024) { setError('Choose a QR image up to 4 MB.'); return; }
+    try {
+      const result = await fetch('/api/admin/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ data: await fileToBase64(file), filename: 'upi-payment-qr' }) });
+      const data = await result.json().catch(() => ({}));
+      if (!result.ok) throw new Error(data.message || 'QR upload failed.');
+      setForm((current) => ({ ...current, upiQrImage: data.url })); setError('');
+    } catch (err) { setError(err.message); }
+  };
+  const save = async (event) => {
+    event.preventDefault(); setError(''); setMessage('');
+    try {
+      const response = await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ upiId: form.upiId, upiQrImage: form.upiQrImage, paymentInstructions: form.paymentInstructions }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not save payment details.');
+      setMessage('UPI details saved. Customers will see these at checkout.');
+    } catch (err) { setError(err.message); }
+  };
+  return <div className="ops-section"><GlassCard style={{ padding: 22, maxWidth: 680 }}><p className="eyebrow">Manual UPI payments</p><h2 style={{ marginTop: 0 }}>Set your payment QR</h2><p style={{ color: 'var(--muted)', fontSize: 13 }}>Customers pay the requested advance using these details. Their “I’ve paid” report stays pending until you record the verified amount under Orders.</p><form onSubmit={save} style={{ display: 'grid', gap: 14 }}><label className="floating-field"><input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder=" " /><span>UPI ID / payment handle</span></label><label className="floating-field floating-textarea"><textarea rows={3} value={form.paymentInstructions || ''} onChange={(e) => setForm({ ...form, paymentInstructions: e.target.value })} placeholder=" " /><span>Instructions for customers</span></label><div><p className="field-label">QR code image</p>{form.upiQrImage && <img src={form.upiQrImage} alt="UPI payment QR preview" style={{ width: 170, height: 170, objectFit: 'contain', background: '#fff', borderRadius: 12, padding: 8, border: '1px solid var(--line)' }} />}<label style={{ display: 'block', marginTop: 10 }}><input type="file" accept="image/*" onChange={uploadQr} /><span style={{ marginLeft: 8 }}>Upload QR image</span></label></div>{error && <div role="alert" style={{ color: '#c55a83' }}>{error}</div>}{message && <div style={{ color: '#3e8e7e' }}>{message}</div>}<Button type="submit">Save payment details</Button></form></GlassCard></div>;
+}
+
+function AdminCustomRequestsPanel({ onMessages }) {
+  const adminToken = localStorage.getItem('efu_admin_token') || '';
+  const [requests, setRequests] = useState([]);
+  const [error, setError] = useState('');
+  const refresh = async () => {
+    try {
+      const response = await fetch('/api/admin/custom-requests', { headers: { Authorization: `Bearer ${adminToken}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Could not load requests.');
+      setRequests(data.requests || []);
+    } catch (err) { setError(err.message); }
+  };
+  useEffect(() => { refresh(); }, []);
+  return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><WandSparkles size={15} /> Customer ideas, references and contact numbers</span><button className="small-link" onClick={refresh}><RefreshCw size={13} /> Refresh</button></div>{error && <div role="alert">{error}</div>}{requests.length ? <div style={{ display: 'grid', gap: 12 }}>{requests.map((item) => {
+    const refs = Array.isArray(item.referenceUrls) ? item.referenceUrls : [];
+    return <GlassCard key={item.id} style={{ padding: 18 }}><div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}><img src={media.collage} alt="" style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 12 }} /><div style={{ flex: 1 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><div><Badge tone={item.status === 'QUOTE_SENT' ? 'blush' : 'soft'}>{item.status}</Badge><h3 style={{ margin: '7px 0 2px' }}>{item.title}</h3><p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>{item.id} · {item.customer || 'Customer'} · {item.phone || 'No phone number'}</p></div><button className="button button-mini" onClick={onMessages}><MessageCircle size={13} /> Open messages</button></div><p style={{ margin: '10px 0', whiteSpace: 'pre-wrap' }}>{item.description}</p>{refs.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{refs.map((url, index) => <a href={url} target="_blank" rel="noreferrer" key={url} style={{ color: '#995f83', fontSize: 12 }}>Reference {index + 1} ↗</a>)}</div>}<div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12, color: 'var(--muted)' }}><span>Needed by: {item.neededBy || '—'}</span><span>Budget: {item.budget || '—'}</span><span>Occasion: {item.occasion || '—'}</span><span>Pickup: {item.pickupLocation || '—'}</span>{item.phone && <a href={`tel:${item.phone}`}><PhoneCall size={12} /> Call customer</a>}</div></div></div></GlassCard>;
+  })}</div> : <EmptyState title="No custom requests yet" body="Customer ideas and their reference files will appear here." />}</div>;
+}
+
+function AdminOpsPanel({ tab, setTab }) {
   if (tab === 'Products') return <AdminProductsPanel />;
   if (tab === 'Categories') return <AdminCategoriesPanel />;
   if (tab === 'Orders') return <AdminOrdersPanel />;
-  if (tab === 'Order Queries') return <AdminOrderQueriesPanel />;
+  if (tab === 'Messages') return <AdminConversationsPanel />;
+  if (tab === 'Custom Requests') return <AdminCustomRequestsPanel onMessages={() => setTab('Messages')} />;
+  if (tab === 'Team') return <AdminTeamPanel />;
+  if (tab === 'Payment Setup') return <AdminPaymentSetupPanel />;
   if (tab === 'Orders') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Today’s deliveries</button><button>Payment pending</button><button>Location approvals pending</button><button><Download size={14} /> Export CSV</button></div><div className="ops-attention-grid">{adminNeedsAttention.map((item) => <GlassCard className="attention-card" key={item.label}><Badge tone={item.tone}>{item.label}</Badge><strong>{item.detail}</strong><div className="attention-actions"><button>Open detail</button><button className="icon-button"><PhoneCall size={14} /></button></div></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Order control</p><h2>Search, approve, update</h2></div><div className="global-search"><Search size={15} /><input placeholder="Order, phone, name or request ID" /></div></div>{sampleOrders.map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.id}</strong><span>{order.customer} · {order.item}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge><span>{order.locationApproval === 'PENDING' ? 'Location pending' : 'KIET · Main Gate'}</span><button className="small-link">Update status <ChevronDown size={13} /></button></div>)}</GlassCard></div>;
   if (tab === 'Custom Requests') return <div className="ops-section"><div className="ops-toolbar"><button className="active-filter">Awaiting my quote</button><button>Quote expiring soon</button><button><MessageCircle size={14} /> WhatsApp customer</button></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Quote workflow</p><h2>Requests needing a reply</h2></div><Button variant="secondary" icon={<Plus size={15} />}>New quote</Button></div>{sampleRequests.map((request) => <div className="ops-request-row" key={request.id}><img src={request.image} alt="" /><div><strong>{request.id} · {request.title}</strong><span>{request.customer} · {request.budget} · needed by {request.neededBy}</span></div><Badge tone={request.status === 'QUOTE SENT' ? 'blush' : 'soft'}>{request.status}</Badge><div className="row-actions"><button>Ask customer</button><button className="button button-mini">Send quote</button></div></div>)}</GlassCard></div>;
   if (tab === 'Delivery Areas' || tab === 'Delivery Slots') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><MapPin size={15} /> Muradnagar only · manual locations do not block order creation</span><Button variant="secondary" icon={<Plus size={15} />}>Add area</Button></div><div className="ops-card-grid">{deliveryAreas.map((area, index) => <GlassCard className="area-card" key={area}><div className="area-card-top"><Badge tone={index === 0 ? 'icy' : 'soft'}>{index === 0 ? 'CAMPUS' : area.startsWith('Other') ? 'MANUAL' : 'AREA'}</Badge><button className="icon-button"><Edit3 size={14} /></button></div><h3>{area}</h3><p>{index === 0 ? 'Main Gate · Canteen · Library · Hostel Gate' : area.startsWith('Other') ? 'Approval required · fee set by admin' : 'Active delivery area · ₹50 or free above ₹1,000'}</p></GlassCard>)}</div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Admin-editable slots</p><h2>Delivery slots</h2></div><Button variant="secondary" icon={<Plus size={15} />}>Add slot</Button></div>{deliverySlots.map((slot) => <div className="ops-order-row" key={slot.id}><div><strong>{slot.label}</strong><span>{slot.area} · {slot.days}</span></div><Badge tone="icy">{slot.remaining} spots left</Badge><button className="small-link">Edit <Edit3 size={13} /></button></div>)}</GlassCard></div>;
@@ -1393,7 +1644,7 @@ function AdminOpsPanel({ tab }) {
   if (tab === 'Audit Log') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><ClipboardList size={15} /> Immutable record of money, status, location and role changes</span><button><Download size={14} /> Export log</button></div><GlassCard className="ops-table-card">{auditLogs.map((log) => <div className="ops-order-row" key={`${log.entity}-${log.action}`}><div><strong>{log.action}</strong><span>{log.entity} · by {log.actor}</span></div><span>{log.at}</span><Badge tone="icy">Recorded</Badge><button className="small-link">View diff <ArrowUpRight size={13} /></button></div>)}</GlassCard></div>;
   if (tab === 'Reports') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><BarChart3 size={15} /> Revenue, conversion and repeat-customer signals</span><button><Download size={14} /> Export CSV</button></div><div className="report-grid"><GlassCard><span>Revenue this month</span><strong>₹28,400</strong><small>↑ 12% vs last month</small></GlassCard><GlassCard><span>Custom → order conversion</span><strong>38%</strong><small>from 42 requests</small></GlassCard><GlassCard><span>Average order value</span><strong>₹1,420</strong><small>across 20 paid orders</small></GlassCard><GlassCard><span>Repeat customers</span><strong>31%</strong><small>students coming back</small></GlassCard></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Exports</p><h2>Open in Excel</h2></div></div><div className="export-actions"><button><Download size={15} /> Orders CSV</button><button><Download size={15} /> Customers CSV</button><button><Download size={15} /> Payments CSV</button><button><Download size={15} /> Products CSV</button></div></GlassCard></div>;
   if (tab === 'Notifications') return <div className="ops-section"><div className="ops-toolbar"><span className="ops-toolbar-note"><Bell size={15} /> Branded email now, WhatsApp hook later</span><Button variant="secondary" icon={<Edit3 size={15} />}>Message templates</Button></div><GlassCard className="ops-table-card">{notificationLogs.map((log) => <div className="ops-order-row" key={`${log.type}-${log.recipient}`}><div><strong>{log.type}</strong><span>{log.channel} · {log.recipient} · {log.attempts} attempt(s)</span></div><Badge tone={log.status === 'Delivered' ? 'icy' : 'soft'}>{log.status}</Badge><button className="small-link">Open log <ArrowUpRight size={13} /></button></div>)}</GlassCard></div>;
-  if (tab === 'Payment Issues') return <div className="ops-section"><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>TEST MODE</strong><span>Razorpay key starts with rzp_test_. Never use this environment for live collection.</span></div><Badge tone="blush">rzp_test_</Badge></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Daily reconciliation</p><h2>1 issue needs a re-sync</h2></div><Button variant="secondary" icon={<RefreshCw size={15} />}>Run reconciliation</Button></div><div className="payment-issue-row"><div><strong>EFU-1037 · paid but not confirmed</strong><span>Razorpay payment captured · webhook retry pending</span></div><Badge tone="blush">Mismatch</Badge><button className="small-link">Re-sync payment <RefreshCw size={13} /></button></div></GlassCard></div>;
+  if (tab === 'Payment Issues') return <div className="ops-section"><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>Manual payment verification</strong><span>Customer payment reports stay pending until the studio records the amount received.</span></div><Badge tone="icy">UPI</Badge></div><GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Daily reconciliation</p><h2>1 issue needs a re-sync</h2></div><Button variant="secondary" icon={<RefreshCw size={15} />}>Run reconciliation</Button></div><div className="payment-issue-row"><div><strong>EFU-1037 · paid but not confirmed</strong><span>Review the customer's reported payment and update the verified amount</span></div><Badge tone="blush">Mismatch</Badge><button className="small-link">Review payment <RefreshCw size={13} /></button></div></GlassCard></div>;
   return <div className="ops-section"><GlassCard className="empty-state"><div className="empty-icon"><SlidersHorizontal size={25} /></div><h3>{tab} is ready for the next backend milestone.</h3><p>The prototype keeps this panel modular so the MERN resource can plug in without moving catalogue, pricing or permission logic into page components.</p><Button variant="secondary">Configure</Button></GlassCard></div>;
 }
 
@@ -1491,6 +1742,7 @@ function AdminLoginPage({ onLoginSuccess }) {
 function AdminPage() {
   const [tab, setTab] = useState('Dashboard');
   const [token, setToken] = useState(() => localStorage.getItem('efu_admin_token') || '');
+  const [checkingSession, setCheckingSession] = useState(() => Boolean(localStorage.getItem('efu_admin_token')));
   const [adminUser, setAdminUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('efu_admin_user') || 'null');
@@ -1499,19 +1751,33 @@ function AdminPage() {
     }
   });
 
+  useEffect(() => {
+    if (!token) { setCheckingSession(false); return; }
+    fetch('/api/admin/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error('Admin session expired.');
+        setAdminUser(data.admin);
+      })
+      .catch(() => { localStorage.removeItem('efu_admin_token'); localStorage.removeItem('efu_admin_user'); setToken(''); setAdminUser(null); })
+      .finally(() => setCheckingSession(false));
+  }, [token]);
+
   const handleLogout = () => {
     localStorage.removeItem('efu_admin_token');
     localStorage.removeItem('efu_admin_user');
     setToken('');
     setAdminUser(null);
+    setCheckingSession(false);
   };
 
+  if (checkingSession) return <GradientBackground variant="admin"><main className="container success-page"><p>Checking your studio session…</p></main></GradientBackground>;
   if (!token) {
-    return <AdminLoginPage onLoginSuccess={(tok, user) => { setToken(tok); setAdminUser(user); }} />;
+    return <AdminLoginPage onLoginSuccess={(tok, user) => { setAdminUser(user); setCheckingSession(true); setToken(tok); }} />;
   }
 
-  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Order Queries', MessageCircle], ['Custom Requests', MessageCircle], ['Products', Palette], ['Categories', Tag], ['Discounts', Zap], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ['Team', UserPlus], ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
-  return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>TEST MODE · All payment actions are safe to preview</strong><span>Razorpay test key detected · live payments remain disabled until launch configuration.</span></div><Badge tone="icy">OPEN</Badge></div><div className="admin-stat-grid"><GlassCard><span className="stat-label">Orders today</span><strong>12</strong><small className="stat-up">↑ 18% this week</small></GlassCard><GlassCard><span className="stat-label">Pending quotes</span><strong>08</strong><small>3 need your reply</small></GlassCard><GlassCard><span className="stat-label">In production</span><strong>14</strong><small>Across 7 categories</small></GlassCard><GlassCard><span className="stat-label">Revenue</span><strong>₹28.4k</strong><small className="stat-up">↑ 12% this month</small></GlassCard></div><div className="admin-main-grid"><GlassCard className="revenue-card"><div className="admin-card-heading"><div><p className="eyebrow">A gentle upward trend</p><h2>Revenue overview</h2></div><select><option>Last 30 days</option><option>Last 7 days</option></select></div><div className="chart"><div className="chart-grid"><span /><span /><span /><span /></div><svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Revenue sparkline"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#FFAFCC" stopOpacity=".42" /><stop offset="100%" stopColor="#FFAFCC" stopOpacity="0" /></linearGradient></defs><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23 L600,180 L0,180 Z" fill="url(#chartFill)" /><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23" fill="none" stroke="#C55A83" strokeWidth="3" strokeLinecap="round" /></svg><div className="chart-labels"><span>01 Sep</span><span>15 Sep</span><span>30 Sep</span></div></div></GlassCard><GlassCard className="requests-card"><div className="admin-card-heading"><div><p className="eyebrow">Needs attention</p><h2>Keep things moving</h2></div><button className="small-link" onClick={() => setTab('Orders')}>View all <ArrowUpRight size={14} /></button></div>{adminNeedsAttention.map((item) => <div className="admin-request" key={item.label}><div className="attention-icon"><AlertCircle size={15} /></div><div><strong>{item.label}</strong><span>{item.detail}</span></div><Badge tone={item.tone}>Open</Badge></div>)}</GlassCard></div><GlassCard className="orders-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Keep things moving</p><h2>Recent orders</h2></div><button className="small-link" onClick={() => setTab('Orders')}>Manage orders <ArrowUpRight size={14} /></button></div><div className="orders-table"><div className="orders-table-row orders-table-head"><span>Order</span><span>Customer</span><span>Piece</span><span>Status</span><span>Total</span></div>{sampleOrders.map((order) => <div className="orders-table-row" key={order.id}><span><strong>{order.id}</strong><small>{order.date}</small></span><span>{order.customer}</span><span>{order.item}</span><span><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge></span><span><strong>{formatINR(order.total)}</strong></span></div>)}</div></GlassCard></> : <AdminOpsPanel tab={tab} />}</section></main></GradientBackground>;
+  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Messages', MessageCircle], ['Custom Requests', WandSparkles], ['Products', Palette], ['Categories', Tag], ['Payment Setup', CreditCard], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ...(String(adminUser?.role).toUpperCase() === 'OWNER' ? [['Team', UserPlus]] : []), ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
+  return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <><div className="test-mode-banner"><AlertCircle size={17} /><div><strong>Manual payments · Studio confirmed</strong><span>Record advance and balance payments only after you verify they arrived.</span></div><Badge tone="icy">OPEN</Badge></div><div className="admin-stat-grid"><GlassCard><span className="stat-label">Orders today</span><strong>12</strong><small className="stat-up">↑ 18% this week</small></GlassCard><GlassCard><span className="stat-label">Pending quotes</span><strong>08</strong><small>3 need your reply</small></GlassCard><GlassCard><span className="stat-label">In production</span><strong>14</strong><small>Across 7 categories</small></GlassCard><GlassCard><span className="stat-label">Revenue</span><strong>₹28.4k</strong><small className="stat-up">↑ 12% this month</small></GlassCard></div><div className="admin-main-grid"><GlassCard className="revenue-card"><div className="admin-card-heading"><div><p className="eyebrow">A gentle upward trend</p><h2>Revenue overview</h2></div><select><option>Last 30 days</option><option>Last 7 days</option></select></div><div className="chart"><div className="chart-grid"><span /><span /><span /><span /></div><svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Revenue sparkline"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#FFAFCC" stopOpacity=".42" /><stop offset="100%" stopColor="#FFAFCC" stopOpacity="0" /></linearGradient></defs><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23 L600,180 L0,180 Z" fill="url(#chartFill)" /><path d="M0,152 C30,145 42,118 76,125 S120,139 153,104 S203,120 229,92 S277,108 306,74 S353,84 377,93 S414,61 447,70 S479,84 507,45 S552,63 600,23" fill="none" stroke="#C55A83" strokeWidth="3" strokeLinecap="round" /></svg><div className="chart-labels"><span>01 Sep</span><span>15 Sep</span><span>30 Sep</span></div></div></GlassCard><GlassCard className="requests-card"><div className="admin-card-heading"><div><p className="eyebrow">Needs attention</p><h2>Keep things moving</h2></div><button className="small-link" onClick={() => setTab('Orders')}>View all <ArrowUpRight size={14} /></button></div>{adminNeedsAttention.map((item) => <div className="admin-request" key={item.label}><div className="attention-icon"><AlertCircle size={15} /></div><div><strong>{item.label}</strong><span>{item.detail}</span></div><Badge tone={item.tone}>Open</Badge></div>)}</GlassCard></div><GlassCard className="orders-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Keep things moving</p><h2>Recent orders</h2></div><button className="small-link" onClick={() => setTab('Orders')}>Manage orders <ArrowUpRight size={14} /></button></div><div className="orders-table"><div className="orders-table-row orders-table-head"><span>Order</span><span>Customer</span><span>Piece</span><span>Status</span><span>Total</span></div>{sampleOrders.map((order) => <div className="orders-table-row" key={order.id}><span><strong>{order.id}</strong><small>{order.date}</small></span><span>{order.customer}</span><span>{order.item}</span><span><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge></span><span><strong>{formatINR(order.total)}</strong></span></div>)}</div></GlassCard></> : <AdminOpsPanel tab={tab} setTab={setTab} />}</section></main></GradientBackground>;
 }
 
 const LiveDataContext = createContext(null);
@@ -1594,10 +1860,10 @@ function App() {
 
             {/* Customer Account Routes (Protected) */}
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
-            <Route path="/account/requests/:id" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+            <Route path="/account/requests/:id" element={<ProtectedRoute><RequestConversationPage /></ProtectedRoute>} />
 
             {/* Admin Desk Route (Protected) */}
-            <Route path="/admin" element={<ProtectedRoute publicRoute={false} requireAdmin><AdminPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminPage />} />
 
             {/* Catch-all Route */}
             <Route path="*" element={<Navigate to="/" replace />} />

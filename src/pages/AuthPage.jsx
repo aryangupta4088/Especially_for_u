@@ -127,11 +127,11 @@ function PrimaryButton({ children, loading, icon, onClick, type = 'button', disa
   );
 }
 
-function GoogleButton({ onClick, loading, label }) {
+function GoogleButton({ onClick, loading, label, disabled = false }) {
   return (
     <button
       type="button"
-      disabled={loading}
+      disabled={loading || disabled}
       onClick={onClick}
       style={{
         width: '100%', padding: '12px 18px', borderRadius: 14,
@@ -161,27 +161,56 @@ export default function AuthPage({ initialMode = 'login' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleReady, setGoogleReady] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/config').then((response) => response.json()).then((config) => setGoogleClientId(config.googleClientId || '')).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!googleClientId) return;
+    if (window.google?.accounts?.oauth2) { setGoogleReady(true); return; }
+    let script = document.querySelector('script[data-google-identity]');
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleIdentity = 'true';
+      document.head.appendChild(script);
+    }
+    const ready = () => setGoogleReady(Boolean(window.google?.accounts?.oauth2));
+    script.addEventListener('load', ready);
+    const timer = window.setInterval(ready, 250);
+    return () => { script.removeEventListener('load', ready); window.clearInterval(timer); };
+  }, [googleClientId]);
 
   useEffect(() => { setError(''); setSuccess(''); }, [mode]);
   useEffect(() => {
     if (auth.isAuthenticated && mode !== 'forgot') navigate(from, { replace: true });
   }, [auth.isAuthenticated, navigate, from, mode]);
 
-  const handleGoogle = async (demo = false) => {
+  const handleGoogle = () => {
     setError('');
+    if (!googleClientId) return setError('Google sign-in is not configured yet. Add GOOGLE_CLIENT_ID to the server settings.');
+    if (!window.google?.accounts?.oauth2) return setError('Google sign-in is still loading. Please try again in a moment.');
     setGoogleLoading(true);
-    try {
-      const payload = demo
-        ? { email: email || `demo-${Date.now()}@efu.in`, name: name || 'Google User', _demo: true }
-        : { email: email || `demo-${Date.now()}@efu.in`, name: name || 'Google User', _demo: true };
-      await auth.loginWithGoogle(payload);
-      navigate(from, { replace: true });
-    } catch (err) { setError(err.message || 'Google sign-in failed.'); }
-    finally { setGoogleLoading(false); }
+    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: googleClientId,
+      scope: 'openid email profile',
+      callback: async (response) => {
+        try {
+          if (!response.access_token) throw new Error(response.error_description || 'Google sign-in was cancelled.');
+          await auth.loginWithGoogle({ accessToken: response.access_token });
+          navigate(from, { replace: true });
+        } catch (err) { setError(err.message || 'Google sign-in failed.'); }
+        finally { setGoogleLoading(false); }
+      },
+    });
+    tokenClient.requestAccessToken();
   };
 
   const handleLogin = async (e) => {
@@ -202,19 +231,6 @@ export default function AuthPage({ initialMode = 'login' }) {
       await auth.register({ name, email, password, phone });
       navigate(from, { replace: true });
     } catch (err) { setError(err.message || 'Sign up failed.'); }
-  };
-
-  const handleAdminRegister = async (e) => {
-    e.preventDefault();
-    setError(''); setSuccess('');
-    if (!name.trim() || !email.trim() || !password) return setError('Name, email and password are required.');
-    if (password.length < 6) return setError('Password must be at least 6 characters.');
-    if (password !== confirm) return setError('Passwords do not match.');
-    if (!adminPassword) return setError('Admin signup password is required.');
-    try {
-      await auth.registerAdmin({ name, email, password, phone, adminPassword });
-      navigate(from, { replace: true });
-    } catch (err) { setError(err.message || 'Admin signup failed.'); }
   };
 
   const handleForgot = async (e) => {
@@ -278,7 +294,8 @@ export default function AuthPage({ initialMode = 'login' }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
                       <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
                     </div>
-                    <GoogleButton label="Continue with Google" loading={googleLoading} onClick={() => handleGoogle(true)} />
+                    <GoogleButton label="Continue with Google" loading={googleLoading} disabled={!googleReady} onClick={handleGoogle} />
+                    {!googleClientId && <small style={{ color: 'var(--muted)', textAlign: 'center' }}>Google sign-in needs the site’s Google client ID.</small>}
                     <div style={{ textAlign: 'center', marginTop: 20, padding: 12, borderRadius: 14, background: 'rgba(62,142,126,.06)', border: '1px solid rgba(62,142,126,.12)', fontSize: 12, color: '#3e8e7e', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                       <ShieldCheck size={14} />
                       <span>Studio admin? <Link to="/admin" style={{ color: '#3e8e7e', fontWeight: 600 }}>Open Studio Desk →</Link></span>
@@ -302,28 +319,12 @@ export default function AuthPage({ initialMode = 'login' }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 2px', color: 'var(--muted)', fontSize: 11 }}>
                         <span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />OR<span style={{ flex: 1, height: 1, background: 'rgba(90,63,86,.12)' }} />
                       </div>
-                      <GoogleButton label="Sign up with Google" loading={googleLoading} onClick={() => handleGoogle(true)} />
+                      <GoogleButton label="Sign up with Google" loading={googleLoading} disabled={!googleReady} onClick={handleGoogle} />
                       <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--muted)' }}>
                         Already have an account? <button type="button" onClick={() => setMode('login')} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: '#c55a83', fontWeight: 600 }}>Sign in instead</button>
                       </div>
                     </form>
 
-                    <div style={{ marginTop: 28, paddingTop: 24, borderTop: '1px dashed rgba(90,63,86,.15)' }}>
-                      <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 999, background: 'rgba(90,63,86,.06)', fontSize: 11, color: '#5a3f56', fontWeight: 600, letterSpacing: .3 }}>
-                          <ShieldCheck size={12} /> STUDIO TEAM ONLY
-                        </div>
-                      </div>
-                      <form onSubmit={handleAdminRegister} style={{ display: 'grid', gap: 12 }}>
-                        <Field label="Admin full name" icon={Check} value={name} onChange={setName} autoComplete="name" />
-                        <Field type="email" label="Admin email" icon={Mail} value={email} onChange={setEmail} autoComplete="email" />
-                        <Field type="tel" label="Admin phone (optional)" icon={ShieldCheck} value={phone} onChange={setPhone} autoComplete="tel" required={false} />
-                        <Field type="password" label="Admin account password" icon={LockKeyhole} value={password} onChange={setPassword} autoComplete="new-password" />
-                        <Field type="password" label="Confirm admin password" icon={LockKeyhole} value={confirm} onChange={setConfirm} autoComplete="new-password" />
-                        <Field type="password" label="Studio admin signup password" icon={ShieldCheck} value={adminPassword} onChange={setAdminPassword} />
-                        <PrimaryButton type="submit" loading={auth.loading} icon={<ShieldCheck size={16} />}>Create studio admin account</PrimaryButton>
-                      </form>
-                    </div>
                   </div>
                 )}
 

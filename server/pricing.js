@@ -44,9 +44,11 @@ export const customRequestSchema = z.object({
   neededBy: z.string().trim().max(40).optional().default(''),
   budget: z.string().trim().max(80).optional().default(''),
   referenceUrls: z.array(z.string().url()).max(5).optional().default([]),
+  referenceFiles: z.array(z.object({ name: z.string().max(180).optional(), data: z.string().max(12 * 1024 * 1024) })).max(5).optional().default([]),
   size: z.string().trim().max(120).optional().default(''),
   colours: z.string().trim().max(240).optional().default(''),
   occasion: z.string().trim().max(80).optional().default(''),
+  pickupLocation: z.string().trim().max(240).optional().default(''),
 });
 
 export function calculateOrder(input, catalog, storeSettings) {
@@ -73,9 +75,9 @@ export function calculateOrder(input, catalog, storeSettings) {
   const deliveryFee = input.delivery.method === 'home' && subtotal < 1000 ? 50 : 0;
   const giftWrapFee = input.gift.giftWrap ? Number(storeSettings.giftWrapPrice || 79) : 0;
   const total = subtotal + deliveryFee + giftWrapFee;
-  const advanceDue = hasCustomItem ? Math.ceil(total * 0.5) : total > 1000 ? Math.ceil(total * 0.5) : total > 300 && input.paymentPlan === 'COD_WITH_ADVANCE' ? 100 : input.paymentPlan === 'FULL_ONLINE' ? total : 0;
+  const advanceDue = Math.ceil(total * 0.5);
   const balanceDue = Math.max(0, total - advanceDue);
-  const paymentOptions = hasCustomItem || total > 1000 ? ['ADVANCE_50'] : total <= 300 ? ['FULL_ONLINE', 'COD'] : ['FULL_ONLINE', 'COD_WITH_ADVANCE'];
+  const paymentOptions = ['ADVANCE_50'];
 
   return {
     lineItems,
@@ -88,6 +90,6 @@ export function calculateOrder(input, catalog, storeSettings) {
     hasCustomItem,
     locationApproval: isManualLocation ? 'PENDING' : 'NOT_NEEDED',
     paymentOptions,
-    paymentPlan: hasCustomItem ? 'ADVANCE_50' : input.paymentPlan || paymentOptions[0],
+    paymentPlan: 'ADVANCE_50',
   };
 }

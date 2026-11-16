@@ -32,7 +32,7 @@ Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` in
 
 ## Email verification
 
-Email/password signups now receive a 6-digit code by email. The code expires after 10 minutes, is stored as a hash, and permits at most five attempts. Configure `EMAIL_PROVIDER=gmail`, `GMAIL_USER` and `GMAIL_APP_PASSWORD` for delivery. Set `APP_BASE_URL` to the deployed website origin (for example, `https://your-domain.example`) so password-reset links point to the live site. Local development defaults to `http://localhost:3000`; production will not send a reset link until `APP_BASE_URL` is set. Apply migration `007_email_verification.sql` before enabling the updated signup flow.
+Email/password signups now receive a 6-digit code by email. The code expires after 10 minutes, is stored as a hash, and permits at most five attempts. Configure `EMAIL_PROVIDER=gmail`, `GMAIL_USER` and `GMAIL_APP_PASSWORD` for delivery. Gmail delivery resolves its SMTP host to IPv4 and uses STARTTLS on port 587, so the deployment host must allow outbound connections on that port. Set `APP_BASE_URL` to the deployed website origin (for example, `https://your-domain.example`) so password-reset links point to the live site. Local development defaults to `http://localhost:3000`; production will not send a reset link until `APP_BASE_URL` is set. Apply migration `007_email_verification.sql` before enabling the updated signup flow.
 
 ## API surface
 

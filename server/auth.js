@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
+import { resolve4 } from 'node:dns/promises';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET must be configured in production.');
@@ -122,7 +123,7 @@ function verificationCodeHash(email, code) {
 }
 
 async function sendVerificationEmail(email, name, code) {
-  const transport = buildTransport();
+  const transport = await buildTransport();
   if (!transport) {
     const error = new Error('Email verification is not configured. Please contact the studio.');
     error.code = 'EMAIL_NOT_CONFIGURED';
@@ -278,16 +279,36 @@ export function optionalUserJWT(request, _response, next) {
   next();
 }
 
-function buildTransport() {
+function isGmailConfigured() {
+  return process.env.EMAIL_PROVIDER === 'gmail'
+    && Boolean(process.env.GMAIL_USER)
+    && Boolean(process.env.GMAIL_APP_PASSWORD)
+    && !process.env.GMAIL_APP_PASSWORD.includes('REPLACE_ME');
+}
+
+async function buildTransport() {
+  if (!isGmailConfigured()) return null;
+
+  let addresses;
   try {
-    if (process.env.EMAIL_PROVIDER === 'gmail' && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD && !process.env.GMAIL_APP_PASSWORD.includes('REPLACE_ME')) {
-      return nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-      });
-    }
-  } catch { /* ignore */ }
-  return null;
+    addresses = await resolve4('smtp.gmail.com');
+  } catch (error) {
+    console.error('[email-transport] Gmail IPv4 DNS lookup failed:', error.message);
+    throw authError('Email delivery is temporarily unavailable.', 'EMAIL_SEND_FAILED');
+  }
+  if (!addresses.length) {
+    throw authError('Email delivery is temporarily unavailable.', 'EMAIL_SEND_FAILED');
+  }
+
+  const host = addresses[Math.floor(Math.random() * addresses.length)];
+  return nodemailer.createTransport({
+    host,
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    tls: { servername: 'smtp.gmail.com' },
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
 }
 
 export async function generatePasswordResetToken(repository, email) {
@@ -296,7 +317,7 @@ export async function generatePasswordResetToken(repository, email) {
     return { sent: true, message: 'If that email belongs to an account, a reset link was sent.' };
   }
 
-  const transport = buildTransport();
+  const transport = await buildTransport();
   if (!transport) {
     const error = new Error('Password reset email delivery is not configured.');
     error.code = 'EMAIL_NOT_CONFIGURED';
@@ -361,10 +382,11 @@ export async function resetPasswordWithToken(repository, rawToken, newPassword) 
 }
 
 export function authConfig() {
+  const gmailConfigured = isGmailConfigured();
   return {
     adminCount: admins().length,
     jwtConfigured: Boolean(process.env.JWT_SECRET),
     userAuth: true,
-    passwordResetProvider: buildTransport() ? 'gmail' : 'console-fallback',
+    passwordResetProvider: gmailConfigured ? 'gmail' : 'console-fallback',
   };
 }

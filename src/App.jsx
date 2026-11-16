@@ -395,8 +395,9 @@ function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
 }
 
 function CategoryCard({ category, index }) {
-  return <motion.div className={`category-card category-${category.size}`} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ delay: index * 0.04, ...pageTransition }} whileHover={{ rotate: index % 2 ? -1.2 : 1.2, y: -4 }}>
-    <Link to={`/category/${category.id}`}><img src={category.image} alt={category.name} loading="lazy" /><div className="category-overlay" /><div className="category-copy"><span className="eyebrow">{category.eyebrow}</span><h3>{category.name}</h3><p>{category.description}</p><span className="circle-arrow"><ArrowUpRight size={17} /></span></div></Link>
+  const size = { s: 'standard', m: 'wide', l: 'tall' }[category.size] || 'standard';
+  return <motion.div className={`category-card category-${size}`} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ delay: index * 0.04, ...pageTransition }} whileHover={{ rotate: index % 2 ? -1.2 : 1.2, y: -4 }}>
+    <Link to={`/category/${category.slug || category.id}`}><img src={category.image} alt={category.name} loading="lazy" /><div className="category-overlay" /><div className="category-copy"><span className="eyebrow">{category.eyebrow}</span><h3>{category.name}</h3><p>{category.description}</p><span className="circle-arrow"><ArrowUpRight size={17} /></span></div></Link>
   </motion.div>;
 }
 
@@ -447,11 +448,13 @@ function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live: prov
   const [customOnly, setCustomOnly] = useState(false);
   const [sort, setSort] = useState('featured');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const selectedCategory = categories.find((item) => item.id === category || item.slug === category);
   const filtered = useMemo(() => {
     const list = products.filter((product) => {
       const text = `${product.name} ${product.description}`.toLowerCase();
       const matchesQuery = !query || text.includes(query.toLowerCase());
-      const matchesCategory = category === 'all' || product.category === category;
+      const matchesCategory = category === 'all' || product.category === category
+        || (selectedCategory && (product.category === selectedCategory.id || product.category === selectedCategory.slug));
       const matchesOccasion = occasion === 'all' || (product.occasions || []).includes(occasion);
       const matchesCustom = !customOnly || product.customizable;
       return matchesQuery && matchesCategory && matchesOccasion && matchesCustom;
@@ -459,7 +462,7 @@ function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live: prov
     if (sort === 'low') return [...list].sort((a, b) => a.price - b.price);
     if (sort === 'high') return [...list].sort((a, b) => b.price - a.price);
     return list;
-  }, [category, customOnly, occasion, products, query, sort]);
+  }, [category, customOnly, occasion, products, query, selectedCategory, sort]);
   const clear = () => { setQuery(''); setCategory('all'); setOccasion('all'); setCustomOnly(false); };
   return <GradientBackground variant="shop"><Navbar cartCount={useApp().cart.length} /><main><section className="page-intro container"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The little shop</p><h1>Find your <em>something.</em></h1><p>Handmade gifts, soft keepsakes and tiny delights — all ready to make someone’s day.</p></div><div className="shop-note"><span className="mini-dot" /> Delivering only in <strong>Muradnagar</strong></div></section><section className="shop-layout container"><aside className={`filter-panel ${filtersOpen ? 'is-open' : ''}`}><div className="filter-head"><h3>Filter the feeling</h3><button className="icon-button filter-close" onClick={() => setFiltersOpen(false)}><X size={18} /></button></div><label className="field-label">Search</label><div className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try “memory” or “flowers”" /></div><label className="field-label">Categories</label><div className="filter-list"><button className={category === 'all' ? 'is-selected' : ''} onClick={() => setCategory('all')}>All creations <span>{products.length}</span></button>{categories.map((item) => <button className={category === item.id || category === item.slug ? 'is-selected' : ''} onClick={() => setCategory(item.id || item.slug)} key={item.id || item.slug}>{item.name}<span>{products.filter((product) => product.category === item.id || product.category === item.slug).length}</span></button>)}</div><label className="field-label">Occasion</label><div className="mini-chips">{occasions.map((item) => <button className={occasion === item.toUpperCase().replaceAll(' ', '_') ? 'is-selected' : ''} onClick={() => setOccasion(item.toUpperCase().replaceAll(' ', '_'))} key={item}>{item}</button>)}</div><label className="toggle-row"><span><strong>Customisable only</strong><small>Show pieces made around your details</small></span><button className={`toggle ${customOnly ? 'is-on' : ''}`} onClick={() => setCustomOnly(!customOnly)} aria-label="Toggle customisable products"><span /></button></label><button className="clear-filters" onClick={clear}>Clear all filters</button></aside><div className="shop-results"><div className="shop-toolbar"><button className="filter-trigger button button-secondary" onClick={() => setFiltersOpen(true)}><Filter size={16} /> Filters</button><div><span className="results-count">{filtered.length} pieces to love</span>{(query || category !== 'all' || occasion !== 'all' || customOnly) && <button className="active-filter" onClick={clear}>Clear <X size={12} /></button>}</div><label className="sort-field">Sort by <select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option></select><ChevronDown size={15} /></label></div>{filtered.length ? <div className="product-grid">{filtered.map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div> : <EmptyState title="Nothing here yet" body="Try a softer search or clear a filter — your little something is probably nearby." onClick={clear} />}</div></section></main></GradientBackground>;
 }

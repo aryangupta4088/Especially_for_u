@@ -123,15 +123,8 @@ function verificationCodeHash(email, code) {
 }
 
 async function sendVerificationEmail(email, name, code) {
-  const transport = await buildTransport();
-  if (!transport) {
-    const error = new Error('Email verification is not configured. Please contact the studio.');
-    error.code = 'EMAIL_NOT_CONFIGURED';
-    throw error;
-  }
   const safeName = String(name || 'there').replace(/[<>"'&]/g, '');
-  await transport.sendMail({
-    from: `"Especially For U" <${process.env.GMAIL_USER}>`,
+  await sendEmail({
     to: email,
     subject: 'Your Especially For U verification code',
     text: `Hi ${safeName},\n\nYour verification code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nEspecially For U`,
@@ -286,6 +279,19 @@ function isGmailConfigured() {
     && !process.env.GMAIL_APP_PASSWORD.includes('REPLACE_ME');
 }
 
+function isMailjetConfigured() {
+  return process.env.EMAIL_PROVIDER === 'mailjet'
+    && Boolean(process.env.MAILJET_API_KEY)
+    && Boolean(process.env.MAILJET_SECRET_KEY)
+    && Boolean(process.env.EMAIL_FROM);
+}
+
+function configuredEmailProvider() {
+  if (isMailjetConfigured()) return 'mailjet';
+  if (isGmailConfigured()) return 'gmail';
+  return null;
+}
+
 async function buildTransport() {
   if (!isGmailConfigured()) return null;
 
@@ -311,22 +317,62 @@ async function buildTransport() {
   });
 }
 
+async function sendEmail({ to, subject, text, html }) {
+  const provider = configuredEmailProvider();
+  if (provider === 'mailjet') {
+    const response = await fetch('https://api.mailjet.com/v3.1/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${process.env.MAILJET_API_KEY}:${process.env.MAILJET_SECRET_KEY}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Messages: [{
+          From: { Email: process.env.EMAIL_FROM, Name: 'Especially For U' },
+          To: [{ Email: to }],
+          Subject: subject,
+          TextPart: text,
+          HTMLPart: html,
+        }],
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.Messages?.[0]?.Status !== 'success') {
+      const details = result?.Messages?.flatMap((message) => message.Errors || [])
+        .map((error) => error.ErrorMessage)
+        .filter(Boolean)
+        .join('; ') || result?.ErrorMessage || result?.ErrorIdentifier;
+      throw authError(`Mailjet email delivery failed (${response.status})${details ? `: ${details}` : ''}`, 'EMAIL_SEND_FAILED');
+    }
+    return result;
+  }
+
+  if (provider === 'gmail') {
+    const transport = await buildTransport();
+    return transport.sendMail({
+      from: `"Especially For U" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      text,
+      html,
+    });
+  }
+
+  throw authError('Email delivery is not configured.', 'EMAIL_NOT_CONFIGURED');
+}
+
 export async function generatePasswordResetToken(repository, email) {
   const user = await repository.getUserByEmail(email);
   if (!user) {
     return { sent: true, message: 'If that email belongs to an account, a reset link was sent.' };
   }
 
-  const transport = await buildTransport();
-  if (!transport) {
-    const error = new Error('Password reset email delivery is not configured.');
-    error.code = 'EMAIL_NOT_CONFIGURED';
-    throw error;
+  if (!configuredEmailProvider()) {
+    throw authError('Password reset email delivery is not configured.', 'EMAIL_NOT_CONFIGURED');
   }
   if (!APP_BASE_URL) {
-    const error = new Error('APP_BASE_URL must be configured to the live website URL in production.');
-    error.code = 'APP_BASE_URL_NOT_CONFIGURED';
-    throw error;
+    throw authError('APP_BASE_URL must be configured to the live website URL in production.', 'APP_BASE_URL_NOT_CONFIGURED');
   }
 
   const rawToken = randomBytes(24).toString('hex');
@@ -335,8 +381,7 @@ export async function generatePasswordResetToken(repository, email) {
 
   const resetLink = `${APP_BASE_URL}/reset-password?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
   try {
-    await transport.sendMail({
-      from: process.env.GMAIL_USER,
+    await sendEmail({
       to: user.email,
       subject: 'Reset your Especially For U password',
       text: `Hi ${user.name},\n\nClick below to reset your password (valid for ${PASSWORD_RESET_TTL_HOURS} hour):\n${resetLink}\n\nIf you did not request this, simply ignore this email. Nothing was changed.\n\nWith love,\nEspecially For U`,
@@ -382,11 +427,10 @@ export async function resetPasswordWithToken(repository, rawToken, newPassword) 
 }
 
 export function authConfig() {
-  const gmailConfigured = isGmailConfigured();
   return {
     adminCount: admins().length,
     jwtConfigured: Boolean(process.env.JWT_SECRET),
     userAuth: true,
-    passwordResetProvider: gmailConfigured ? 'gmail' : 'console-fallback',
+    passwordResetProvider: configuredEmailProvider() || 'console-fallback',
   };
 }

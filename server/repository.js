@@ -342,7 +342,7 @@ function mysqlRepository(pool) {
       if (occasion && occasion !== 'all') { where.push('JSON_CONTAINS(occasions_json, ?)'); params.push(JSON.stringify(occasion)); }
       if (q) { where.push('(name LIKE ? OR description LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
       const [rows] = await pool.query(`SELECT * FROM products WHERE ${where.join(' AND ')} ORDER BY sort_order, name`, params);
-      return rows.map((row) => publicProduct({ ...row, originalPrice: row.original_price, saleStartsAt: row.sale_starts_at, saleEndsAt: row.sale_ends_at, startingFrom: false, occasions: parseJson(row.occasions_json, []), options: parseJson(row.options_json, []), allowCustomRequest: Boolean(row.allow_custom_request), isMadeToOrder: Boolean(row.is_made_to_order), returnable: Boolean(row.returnable), customizable: Boolean(row.customizable), premium: false }));
+      return rows.map((row) => publicProduct({ ...row, originalPrice: row.original_price, saleStartsAt: row.sale_starts_at, saleEndsAt: row.sale_ends_at, careInstructions: row.care_instructions, startingFrom: false, occasions: parseJson(row.occasions_json, []), options: parseJson(row.options_json, []), allowCustomRequest: Boolean(row.allow_custom_request), isMadeToOrder: Boolean(row.is_made_to_order), returnable: Boolean(row.returnable), customizable: Boolean(row.customizable), premium: false }));
     },
     async listReviews({ productId, status } = {}) {
       const where = []; const params = [];
@@ -373,6 +373,7 @@ function mysqlRepository(pool) {
       const [rows] = await pool.query(`SELECT * FROM products ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY is_active DESC, sort_order, created_at DESC LIMIT 500`, params);
       return rows.map((row) => ({
         ...row, originalPrice: row.original_price, saleStartsAt: row.sale_starts_at, saleEndsAt: row.sale_ends_at,
+        careInstructions: row.care_instructions,
         occasions: parseJson(row.occasions_json, []), options: parseJson(row.options_json, []),
         allowCustomRequest: Boolean(row.allow_custom_request), isMadeToOrder: Boolean(row.is_made_to_order),
         returnable: Boolean(row.returnable), customizable: Boolean(row.customizable), premium: Boolean(row.premium),
@@ -416,6 +417,7 @@ function mysqlRepository(pool) {
         originalPrice: row.original_price,
         saleStartsAt: row.sale_starts_at,
         saleEndsAt: row.sale_ends_at,
+        careInstructions: row.care_instructions,
         occasions: parseJson(row.occasions_json, []),
         options: parseJson(row.options_json, []),
         allowCustomRequest: Boolean(row.allow_custom_request),

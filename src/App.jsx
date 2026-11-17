@@ -1208,7 +1208,7 @@ function AdminProductsPanel() {
   const [form, setForm] = useState({
     name: '', slug: '', category: '', type: 'READYMADE', price: '', originalPrice: '', saleStartsAt: '', saleEndsAt: '', badge: 'New',
     production: 'Ready in 3 days', description: '', audience: 'her', disclaimer: 'Each piece is unique and may vary slightly.',
-    careInstructions: 'Keep dry, away from direct sunlight for long hours.', image: '',
+    careInstructions: '', image: '',
     occasions: [], customizable: false, returnable: true, allowCustomRequest: true, premium: false, isActive: true,
   });
 
@@ -1246,7 +1246,7 @@ function AdminProductsPanel() {
     setForm({
       name: '', slug: '', category: cats[0]?.slug || cats[0]?.id || '', type: 'READYMADE', price: '', originalPrice: '', saleStartsAt: '', saleEndsAt: '', badge: 'New',
       production: 'Ready in 3 days', description: '', audience: 'her', disclaimer: 'Each piece is unique and may vary slightly.',
-      careInstructions: 'Keep dry, away from direct sunlight for long hours.', image: '',
+      careInstructions: '', image: '',
       occasions: [], customizable: false, returnable: true, allowCustomRequest: true, premium: false, isActive: true,
     });
     setFormMsg({ type: '', text: '' });
@@ -1260,7 +1260,7 @@ function AdminProductsPanel() {
       saleStartsAt: p.saleStartsAt ? String(p.saleStartsAt).slice(0, 16) : '', saleEndsAt: p.saleEndsAt ? String(p.saleEndsAt).slice(0, 16) : '',
       badge: p.badge || 'New', production: p.production || 'Ready in 3 days', description: p.description || '',
       audience: p.audience || 'her', disclaimer: p.disclaimer || '',
-      careInstructions: p.careInstructions || '', image: p.image || '',
+      careInstructions: p.careInstructions || p.care_instructions || '', image: p.image || '',
       occasions: Array.isArray(p.occasions) ? p.occasions : [],
       customizable: !!p.customizable, returnable: !!p.returnable,
       allowCustomRequest: p.allowCustomRequest !== false, premium: !!p.premium,
@@ -1281,10 +1281,9 @@ function AdminProductsPanel() {
       payload.saleEndsAt = payload.saleEndsAt || null;
       let imageUrl = payload.image || '';
       if (payload.image && payload.image.startsWith('data:image')) {
-        try {
-          const uploadRes = await req('POST', '/api/admin/upload', { image: payload.image, filename: payload.slug || 'product' });
-          imageUrl = uploadRes.url || payload.image;
-        } catch (_) { /* keep inline data:image on failure */ }
+        const uploadRes = await req('POST', '/api/admin/upload', { image: payload.image, filename: payload.slug || 'product' });
+        if (!uploadRes.url) throw new Error('Image upload did not return a URL. Please try again.');
+        imageUrl = uploadRes.url;
       }
       payload.image = imageUrl;
       if (editing) {
@@ -1305,14 +1304,21 @@ function AdminProductsPanel() {
   const onImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setFormMsg({ type: 'error', text: 'Choose a JPG, PNG, WebP, or GIF image.' });
+      e.target.value = '';
+      return;
+    }
     if (file.size > 4 * 1024 * 1024) {
       setFormMsg({ type: 'error', text: 'Image too large — max 4MB.' });
+      e.target.value = '';
       return;
     }
     try {
       const b64 = await fileToBase64(file);
       setForm((f) => ({ ...f, image: b64 }));
     } catch (_) { setFormMsg({ type: 'error', text: 'Could not read image.' }); }
+    e.target.value = '';
   };
 
   const toggleOccasion = (o) => setForm((f) => ({
@@ -1474,15 +1480,11 @@ function AdminProductsPanel() {
                   : <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 16 }}><FileImage size={22} style={{ margin: '0 auto 6px' }} /><div style={{ fontSize: 13, fontWeight: 500 }}>No image yet</div><div style={{ fontSize: 11 }}>JPG, PNG, WEBP · up to 4MB</div></div>}
               </div>
               <label style={{ marginTop: 12, display: 'block' }}>
-                <input type="file" accept="image/*" onChange={onImageChange} style={{ display: 'none' }} />
-                <div tabIndex={0} style={{ cursor: 'pointer', padding: 14, borderRadius: 12, background: '#fff', border: '1px solid rgba(90,63,86,.15)', textAlign: 'center', fontSize: 13, color: 'var(--ink)' }}
-                  onClick={(e) => e.currentTarget.previousElementSibling?.click()}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.currentTarget.previousElementSibling?.click(); }}
-                >
+                <div style={{ position: 'relative', cursor: 'pointer', padding: 14, borderRadius: 12, background: '#fff', border: '1px solid rgba(90,63,86,.15)', textAlign: 'center', fontSize: 13, color: 'var(--ink)', overflow: 'hidden' }}>
                   <UploadCloud size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />
                   {form.image ? 'Replace image' : 'Choose image'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Choose product image" onChange={onImageChange} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} />
                 </div>
-                <input type="file" accept="image/*" onChange={onImageChange} style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
               </label>
             </div>
             <label className="toggle-row" style={{ padding: 12, borderRadius: 12, background: 'rgba(90,63,86,.04)', border: '1px solid rgba(90,63,86,.08)' }}>
@@ -1634,6 +1636,7 @@ function AdminCategoriesPanel() {
       setForm((current) => ({ ...current, image }));
     }
     catch (_) { setMsg({ type: 'error', text: 'Could not read image.' }); }
+    e.target.value = '';
   };
   const del = async (c) => {
     try {
@@ -1692,11 +1695,11 @@ function AdminCategoriesPanel() {
               {form.image ? <img src={form.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ textAlign: 'center', color: 'var(--muted)' }}><Camera size={22} style={{ margin: '0 auto 6px' }} /><div style={{ fontSize: 13 }}>No image</div></div>}
             </div>
             <label style={{ display: 'block', marginTop: 12 }}>
-              <div onClick={(e) => e.currentTarget.nextElementSibling?.click()} tabIndex={0} style={{ cursor: 'pointer', padding: 14, borderRadius: 12, background: '#fff', border: '1px solid rgba(90,63,86,.15)', textAlign: 'center', fontSize: 13 }}>
+              <div style={{ position: 'relative', cursor: 'pointer', padding: 14, borderRadius: 12, background: '#fff', border: '1px solid rgba(90,63,86,.15)', textAlign: 'center', fontSize: 13, overflow: 'hidden' }}>
                 <UploadCloud size={16} style={{ verticalAlign: '-3px', marginRight: 6 }} />
                 {form.image ? 'Replace image' : 'Choose image'}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Choose category image" onChange={onImage} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} />
               </div>
-              <input type="file" accept="image/*" onChange={onImage} style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }} />
             </label>
           </div>
         </form>

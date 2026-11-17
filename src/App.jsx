@@ -129,7 +129,7 @@ function AnnouncementBar({ settings = storeSettings }) {
 }
 
 function Navbar({ cartCount, wishlistCount, settings }) {
-  const { logout, user, isAdmin } = useAuth();
+  const { logout, user, isAdmin, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -271,10 +271,10 @@ function Navbar({ cartCount, wishlistCount, settings }) {
               </div>
             )}
 
-            <Link to="/cart" className="icon-button nav-cart" aria-label="Cart">
+            {isAuthenticated && <Link to="/cart" className="icon-button nav-cart" aria-label="Cart">
               <ShoppingBag size={18} />
               {cartCount > 0 && <span className="count-badge">{cartCount}</span>}
-            </Link>
+            </Link>}
 
             <button className="icon-button menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Open menu">
               <Menu size={20} />
@@ -373,6 +373,7 @@ function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa
 
 function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const cta = 'Request this item';
   const handlePrimary = () => {
     if (product.type === 'CUSTOM_QUOTE') return navigate(`/custom-request?product=${product.slug}`);
@@ -381,7 +382,9 @@ function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
       return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
     }).filter(Boolean);
     const adjustment = options.reduce((sum, option) => sum + option.adjustment, 0);
-    onAdd?.({ ...product, productId: product.id, price: Number(product.price) + adjustment, selected: options.map((option) => option.value), selectedOptions: options, quantity: 1 });
+    const cartItem = { ...product, productId: product.id, price: Number(product.price) + adjustment, selected: options.map((option) => option.value), selectedOptions: options, quantity: 1 };
+    if (!isAuthenticated) return navigate('/login', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
+    onAdd?.(cartItem);
     navigate('/checkout');
   };
   return <motion.article className={`product-card ${product.premium ? 'product-premium' : ''}`} whileHover={{ y: -7 }} transition={pageTransition}>
@@ -522,6 +525,7 @@ function ProductPage({ live: providedLive }) {
   const live = providedLive || useLive();
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { addToCart, onWish, wishlist } = useApp();
   const products = live?.products || [];
   const categories = live?.categories || [];
@@ -536,7 +540,9 @@ function ProductPage({ live: providedLive }) {
       const value = option.values?.find((item) => item.name === selected[index]);
       return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
     }).filter(Boolean);
-    addToCart({ ...product, productId: product.id, price, selected: selectedOptions.map((option) => option.value), selectedOptions, quantity });
+    const cartItem = { ...product, productId: product.id, price, selected: selectedOptions.map((option) => option.value), selectedOptions, quantity };
+    if (!isAuthenticated) return navigate('/login', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
+    addToCart(cartItem);
     navigate('/checkout');
   };
   if (!product) return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><EmptyState title="Product not found" body="This item may have been removed from the shop." onClick={() => navigate('/shop')} /></main><Footer /></GradientBackground>;
@@ -2254,8 +2260,9 @@ function OccasionRoute() {
   return <ShopPage initialOccasion={occasion ? occasion.toUpperCase().replaceAll('-', '_') : 'all'} live={live} />;
 }
 
-function App() {
-  const [cart, setCart] = useState(() => readStored('efu_cart', []));
+function AppContent() {
+  const { isAuthenticated } = useAuth();
+  const [cart, setCart] = useState(() => isAuthenticated ? readStored('efu_cart', []) : []);
   const [wishlist, setWishlist] = useState(() => readStored('efu_wishlist', []));
   const [toast, setToast] = useState(null);
   const reduced = useReducedMotion();
@@ -2285,15 +2292,21 @@ function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  useEffect(() => { writeStored('efu_cart', cart); }, [cart]);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (cart.length) setCart([]);
+      clearStored('efu_cart');
+      return;
+    }
+    writeStored('efu_cart', cart);
+  }, [cart, isAuthenticated]);
   useEffect(() => { writeStored('efu_wishlist', wishlist); }, [wishlist]);
 
   window.__efuApp = { cart, wishlist, addToCart, onWish, updateQuantity, removeFromCart, emptyCart: () => setCart([]), reduced };
 
   return (
-    <AuthProvider>
-      <LiveDataProvider>
-        <AnimatePresence mode="wait">
+    <LiveDataProvider>
+      <AnimatePresence mode="wait">
           <Routes>
             {/* Public storefront routes */}
             <Route path="/" element={<HomePage />} />
@@ -2312,7 +2325,7 @@ function App() {
 
             {/* Actions and customer data require a customer account */}
             <Route path="/custom-request" element={<ProtectedRoute signupRequired><CustomRequestPage /></ProtectedRoute>} />
-            <Route path="/cart" element={<ProtectedRoute allowAdmin><CartPage /></ProtectedRoute>} />
+            <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
             <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
             <Route path="/track-order" element={<Navigate to="/account" replace />} />
 
@@ -2334,10 +2347,13 @@ function App() {
               <Check size={16} />{toast}
             </motion.div>
           )}
-        </AnimatePresence>
-      </LiveDataProvider>
-    </AuthProvider>
+      </AnimatePresence>
+    </LiveDataProvider>
   );
+}
+
+function App() {
+  return <AuthProvider><AppContent /></AuthProvider>;
 }
 
 export default App;

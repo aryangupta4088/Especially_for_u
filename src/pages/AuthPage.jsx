@@ -128,6 +128,19 @@ export default function AuthPage({ initialMode = 'login' }) {
   const location = useLocation();
   const auth = useAuth();
   const from = location.state?.from?.pathname || '/';
+  const pendingCartItem = location.state?.pendingCartItem;
+
+  const completeSignIn = () => {
+    if (pendingCartItem) {
+      const addToCart = window.__efuApp?.addToCart;
+      if (!addToCart) {
+        setError('Could not restore your requested item. Please try again.');
+        return;
+      }
+      addToCart(pendingCartItem);
+    }
+    navigate(from, { replace: true });
+  };
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -142,8 +155,8 @@ export default function AuthPage({ initialMode = 'login' }) {
 
   useEffect(() => { setError(''); setSuccess(''); }, [mode]);
   useEffect(() => {
-    if (auth.isAuthenticated && mode !== 'forgot' && from !== '/admin' && !adminSignIn) navigate(from, { replace: true });
-  }, [auth.isAuthenticated, navigate, from, mode, adminSignIn]);
+    if (auth.isAuthenticated && mode !== 'forgot' && from !== '/admin' && !adminSignIn && !pendingCartItem) navigate(from, { replace: true });
+  }, [auth.isAuthenticated, navigate, from, mode, adminSignIn, pendingCartItem]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -156,7 +169,7 @@ export default function AuthPage({ initialMode = 'login' }) {
       try {
         await auth.login({ email, password });
         setAdminSignIn(false);
-        navigate(from, { replace: true });
+        completeSignIn();
       } catch (err) { setAdminSignIn(false); setError(err.message || 'Invalid email or password.'); }
     }
   };
@@ -177,7 +190,7 @@ export default function AuthPage({ initialMode = 'login' }) {
     e.preventDefault(); setError(''); setSuccess('');
     try {
       await auth.verifyEmail({ email, code: verificationCode });
-      navigate(from, { replace: true });
+      completeSignIn();
     } catch (err) { setError(err.message || 'Could not verify that code.'); }
   };
 

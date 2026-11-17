@@ -1602,24 +1602,37 @@ function AdminCategoriesPanel() {
     e.preventDefault();
     setMsg({ type: '', text: '' });
     try {
-      const payload = { ...form, sort_order: Number(form.sort_order || 0) };
+      const payload = { ...form, sortOrder: Number(form.sort_order || 0) };
       if (payload.image && payload.image.startsWith('data:image')) {
-        try {
-          const up = await req('POST', '/api/admin/upload', { image: payload.image, filename: payload.slug || 'category' });
-          payload.image = up.url || payload.image;
-        } catch (_) { /* keep inline */ }
+        const up = await req('POST', '/api/admin/upload', { image: payload.image, filename: payload.slug || 'category' });
+        if (!up.url) throw new Error('Image upload did not return a URL. Please try again.');
+        payload.image = up.url;
       }
       if (editing) await req('PATCH', `/api/admin/categories/${editing.id}`, payload);
       else await req('POST', '/api/admin/categories', payload);
       setMsg({ type: 'success', text: editing ? `Updated “${payload.name}”.` : `Created “${payload.name}”.` });
       setShowForm(false);
       await refresh();
+      window.dispatchEvent(new Event('efu:catalog-updated'));
     } catch (err) { setMsg({ type: 'error', text: err.message || 'Save failed.' }); }
   };
   const onImage = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try { setForm({ ...form, image: await fileToBase64(file) }); }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setMsg({ type: 'error', text: 'Choose a JPG, PNG, WebP, or GIF image.' });
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setMsg({ type: 'error', text: 'Image too large — max 4MB.' });
+      e.target.value = '';
+      return;
+    }
+    try {
+      const image = await fileToBase64(file);
+      setForm((current) => ({ ...current, image }));
+    }
     catch (_) { setMsg({ type: 'error', text: 'Could not read image.' }); }
   };
   const del = async (c) => {

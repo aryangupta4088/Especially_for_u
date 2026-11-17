@@ -961,6 +961,11 @@ app.post('/api/admin/upload', requireAdminJWT, async (request, response, next) =
     const { data: requestedData, image, filename } = request.body || {};
     const data = requestedData || image;
     if (!data) return response.status(400).json({ error: 'MISSING_DATA', message: 'Image data required.' });
+    const match = /^data:image\/(jpeg|png|webp|gif);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(String(data));
+    if (!match) return response.status(400).json({ error: 'INVALID_IMAGE', message: 'Use a JPG, PNG, WebP, or GIF image.' });
+    if (Buffer.from(match[2], 'base64').length > 4 * 1024 * 1024) {
+      return response.status(413).json({ error: 'IMAGE_TOO_LARGE', message: 'Image too large — max 4MB.' });
+    }
     const url = await saveBase64Image(data, (filename || 'upload').replace(/[^a-z0-9]+/gi, '-').toLowerCase());
     return response.status(201).json({ url });
   } catch (error) { return next(error); }
@@ -994,6 +999,7 @@ app.get(/^(?!\/api(?:\/|$)).*/, (_request, response) => response.sendFile(path.j
 
 app.use((error, _request, response, _next) => {
   if (error instanceof ZodError) return response.status(400).json({ error: 'VALIDATION_ERROR', issues: error.issues });
+  if (error.type === 'entity.too.large') return response.status(413).json({ error: 'IMAGE_TOO_LARGE', message: 'Upload is too large. Choose an image up to 4MB.' });
   if (error.message?.includes('Product ') && error.message.endsWith(' is unavailable')) return response.status(422).json({ error: 'PRODUCT_UNAVAILABLE', message: error.message });
   console.error('[api-error]', error);
   return response.status(500).json({ error: 'INTERNAL_SERVER_ERROR', message: 'Something went wrong on the studio server.' });

@@ -217,7 +217,7 @@ export default function AuthPage({ initialMode = 'login' }) {
                 : <>Forgot your <em style={{ fontStyle: 'italic', color: '#c55a83' }}>password?</em></>}
             </h1>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13 }}>
-              {mode === 'login' ? 'Sign in to browse, save and order something handmade just for you.'
+              {mode === 'login' ? 'Sign in to request, save and order something handmade just for you.'
                 : mode === 'signup' ? 'It only takes a moment. We never spam — only pretty updates, if you want them.'
                 : 'Enter your email. We will send you a gentle link to reset it.'}
             </p>

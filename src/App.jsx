@@ -2295,8 +2295,14 @@ function App() {
       <LiveDataProvider>
         <AnimatePresence mode="wait">
           <Routes>
-            {/* Public Storefront Routes - only Home is public */}
+            {/* Public storefront routes */}
             <Route path="/" element={<HomePage />} />
+            <Route path="/shop" element={<ShopPage />} />
+            <Route path="/category/:slug" element={<CategoryRoute />} />
+            <Route path="/occasion/:occasion" element={<OccasionRoute />} />
+            <Route path="/product/:slug" element={<ProductPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/pages/:slug" element={<ContentPage />} />
 
             {/* Authentication Routes - public */}
             <Route path="/login" element={<AuthPage initialMode="login" />} />
@@ -2304,17 +2310,11 @@ function App() {
             <Route path="/forgot-password" element={<AuthPage initialMode="forgot" />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected Storefront Routes */}
-            <Route path="/shop" element={<ProtectedRoute allowAdmin><ShopPage /></ProtectedRoute>} />
-            <Route path="/category/:slug" element={<ProtectedRoute allowAdmin><CategoryRoute /></ProtectedRoute>} />
-            <Route path="/occasion/:occasion" element={<ProtectedRoute allowAdmin><OccasionRoute /></ProtectedRoute>} />
-            <Route path="/product/:slug" element={<ProtectedRoute allowAdmin><ProductPage /></ProtectedRoute>} />
-            <Route path="/custom-request" element={<ProtectedRoute><CustomRequestPage /></ProtectedRoute>} />
+            {/* Actions and customer data require a customer account */}
+            <Route path="/custom-request" element={<ProtectedRoute signupRequired><CustomRequestPage /></ProtectedRoute>} />
             <Route path="/cart" element={<ProtectedRoute allowAdmin><CartPage /></ProtectedRoute>} />
             <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
             <Route path="/track-order" element={<Navigate to="/account" replace />} />
-            <Route path="/about" element={<ProtectedRoute allowAdmin><AboutPage /></ProtectedRoute>} />
-            <Route path="/pages/:slug" element={<ProtectedRoute allowAdmin><ContentPage /></ProtectedRoute>} />
 
             {/* Customer Account Routes (Protected) */}
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />

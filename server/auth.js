@@ -279,15 +279,14 @@ function isGmailConfigured() {
     && !process.env.GMAIL_APP_PASSWORD.includes('REPLACE_ME');
 }
 
-function isMailjetConfigured() {
-  return process.env.EMAIL_PROVIDER === 'mailjet'
-    && Boolean(process.env.MAILJET_API_KEY)
-    && Boolean(process.env.MAILJET_SECRET_KEY)
+function isBrevoConfigured() {
+  return process.env.EMAIL_PROVIDER === 'brevo'
+    && Boolean(process.env.BREVO_API_KEY)
     && Boolean(process.env.EMAIL_FROM);
 }
 
 function configuredEmailProvider() {
-  if (isMailjetConfigured()) return 'mailjet';
+  if (isBrevoConfigured()) return 'brevo';
   if (isGmailConfigured()) return 'gmail';
   return null;
 }
@@ -319,31 +318,26 @@ async function buildTransport() {
 
 async function sendEmail({ to, subject, text, html }) {
   const provider = configuredEmailProvider();
-  if (provider === 'mailjet') {
-    const response = await fetch('https://api.mailjet.com/v3.1/send', {
+  if (provider === 'brevo') {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${Buffer.from(`${process.env.MAILJET_API_KEY}:${process.env.MAILJET_SECRET_KEY}`).toString('base64')}`,
+        'api-key': process.env.BREVO_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        Messages: [{
-          From: { Email: process.env.EMAIL_FROM, Name: 'Especially For U' },
-          To: [{ Email: to }],
-          Subject: subject,
-          TextPart: text,
-          HTMLPart: html,
-        }],
+        sender: { email: process.env.EMAIL_FROM, name: 'Especially For U' },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html,
       }),
       signal: AbortSignal.timeout(15_000),
     });
     const result = await response.json().catch(() => null);
-    if (!response.ok || result?.Messages?.[0]?.Status !== 'success') {
-      const details = result?.Messages?.flatMap((message) => message.Errors || [])
-        .map((error) => error.ErrorMessage)
-        .filter(Boolean)
-        .join('; ') || result?.ErrorMessage || result?.ErrorIdentifier;
-      throw authError(`Mailjet email delivery failed (${response.status})${details ? `: ${details}` : ''}`, 'EMAIL_SEND_FAILED');
+    if (!response.ok) {
+      const details = result?.message || result?.code;
+      throw authError(`Brevo email delivery failed (${response.status})${details ? `: ${details}` : ''}`, 'EMAIL_SEND_FAILED');
     }
     return result;
   }

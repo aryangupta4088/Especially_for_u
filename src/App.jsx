@@ -1345,6 +1345,18 @@ function AdminProductsPanel() {
   };
 
   const filtered = items.filter((p) => !search || `${p.name} ${p.slug} ${p.description}`.toLowerCase().includes(search.toLowerCase()));
+  const groupedProducts = Array.from(filtered.reduce((groups, product) => {
+    const category = cats.find((item) => item.id === product.category || item.slug === product.category);
+    const key = String(category?.id || category?.slug || product.category || 'uncategorized');
+    const group = groups.get(key) || {
+      key,
+      name: category?.name || product.category || 'Uncategorised',
+      products: [],
+    };
+    group.products.push(product);
+    groups.set(key, group);
+    return groups;
+  }, new Map()).values());
 
   return <div className="ops-section">
     <div className="ops-toolbar">
@@ -1510,32 +1522,32 @@ function AdminProductsPanel() {
       </div>
       {loading ? <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading catalog…</div> : (
         filtered.length ? (
-          <div className="orders-table" style={{ gridTemplateColumns: '72px 2fr 1fr 1fr 140px 140px 110px 120px' }}>
-            <div className="orders-table-row orders-table-head" style={{ gridTemplateColumns: 'subgrid', gridColumn: '1 / -1' }}>
-              <span></span><span>Name</span><span>Category</span><span>Occasions</span><span>Price</span><span>Badge</span><span>Status</span><span></span>
-            </div>
-            {filtered.map((p) => {
-              const cat = cats.find((c) => c.id === p.category || c.slug === p.category);
-              return <div className="orders-table-row" key={p.id} style={{ gridTemplateColumns: 'subgrid', gridColumn: '1 / -1', alignItems: 'center' }}>
-                <span><img src={p.image || media.product1} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(90,63,86,.1)' }} /></span>
-                <span><strong style={{ color: 'var(--ink)' }}>{p.name}</strong><small>{p.slug || p.id}</small></span>
-                <span>{cat?.name || p.category || '—'}</span>
-                <span>{Array.isArray(p.occasions) && p.occasions.length ? p.occasions.slice(0, 2).map((o) => <Badge key={o} tone="soft">{o}</Badge>) : <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>}</span>
-                <span><strong style={{ color: 'var(--ink)' }}>{formatINR(Number(p.price || 0))}</strong>{p.originalPrice ? <small style={{ display: 'block', color: 'var(--muted)' }}>was {formatINR(Number(p.originalPrice))}</small> : null}</span>
-                <span><Badge tone={p.premium ? 'signature' : 'icy'}>{p.badge || 'New'}</Badge>{p.premium && <small style={{ display: 'block', marginTop: 4 }}>premium</small>}</span>
-                <span>
-                  <label className="toggle-row" style={{ padding: 0, background: 'none', border: 'none' }}>
-                    <span />
-                    <button type="button" className={`toggle ${p.isActive !== false ? 'is-on' : ''}`} onClick={() => toggleActive(p)}><span /></button>
-                  </label>
-                  <small style={{ display: 'block', marginTop: 4, color: 'var(--muted)', textAlign: 'center' }}>{p.isActive !== false ? 'Active' : 'Hidden'}</small>
-                </span>
-                <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                  <button className="icon-button" onClick={() => openEdit(p)} aria-label="Edit product"><Edit3 size={14} /></button>
-                  <button className="icon-button" style={{ color: '#c55a83' }} onClick={() => setDeleteConfirm(p)} aria-label="Archive product"><Trash2 size={14} /></button>
-                </span>
-              </div>;
-            })}
+          <div className="admin-product-groups">
+            {groupedProducts.map((group) => (
+              <details className="admin-product-group" key={group.key} open={Boolean(search)}>
+                <summary><span>{group.name}</span><small>{group.products.length} product{group.products.length === 1 ? '' : 's'}</small><ChevronDown size={15} /></summary>
+                <div className="admin-product-list">
+                  {group.products.map((p) => (
+                    <div className="admin-product-row" key={p.id}>
+                      <img className="admin-product-image" src={p.image || media.product1} alt="" />
+                      <div className="admin-product-details">
+                        <div className="admin-product-name"><strong>{p.name}</strong><Badge tone={p.premium ? 'signature' : 'icy'}>{p.badge || 'New'}</Badge></div>
+                        <small className="admin-product-meta">{[p.slug || p.id, ...(Array.isArray(p.occasions) ? p.occasions.slice(0, 2) : [])].filter(Boolean).join(' · ')}</small>
+                      </div>
+                      <div className="admin-product-price"><strong>{formatINR(Number(p.price || 0))}</strong>{p.originalPrice && <small>was {formatINR(Number(p.originalPrice))}</small>}</div>
+                      <div className="admin-product-status">
+                        <button type="button" className={`toggle ${p.isActive !== false ? 'is-on' : ''}`} onClick={() => toggleActive(p)} aria-label={`${p.isActive !== false ? 'Hide' : 'Activate'} ${p.name}`}><span /></button>
+                        <small>{p.isActive !== false ? 'Active' : 'Hidden'}</small>
+                      </div>
+                      <div className="admin-product-actions">
+                        <button className="icon-button" onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`}><Edit3 size={14} /></button>
+                        <button className="icon-button" style={{ color: '#c55a83' }} onClick={() => setDeleteConfirm(p)} aria-label={`Archive ${p.name}`}><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
           </div>
         ) : <EmptyState title="No products match yet" body="Create a product from the button above, or clear the search." />
       )}

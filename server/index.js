@@ -854,13 +854,18 @@ app.get('/api/admin/products/:id', requireAdminJWT, async (request, response, ne
 app.post('/api/admin/products', requireAdminJWT, async (request, response, next) => {
   try {
     const body = request.body || {};
+    const price = body.price === '' || body.price == null ? 0 : Number(body.price);
+    const originalPrice = body.originalPrice === '' || body.originalPrice == null ? null : Number(body.originalPrice);
+    if (!Number.isFinite(price) || (originalPrice !== null && !Number.isFinite(originalPrice))) {
+      return response.status(400).json({ error: 'INVALID_PRODUCT_PRICE', message: 'Product pricing data is invalid.' });
+    }
     let imageUrl = body.image || '';
     if (imageUrl && imageUrl.startsWith('data:image')) {
       imageUrl = await saveBase64Image(imageUrl, (body.name || 'product').replace(/[^a-z0-9]+/gi, '-').toLowerCase());
     }
     const id = body.id || newEntityId('P');
     const slug = body.slug || `${(body.name || 'product').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 80)}-${id.slice(-4)}`;
-    const product = await repository.createProduct({ ...body, id, slug, image: imageUrl });
+    const product = await repository.createProduct({ ...body, price, originalPrice, id, slug, image: imageUrl });
     return response.status(201).json({ product });
   } catch (error) { return next(error); }
 });

@@ -1148,8 +1148,8 @@ function AdminProductsPanel() {
     setFormMsg({ type: '', text: '' });
     try {
       const payload = { ...form };
-      if (payload.price) payload.price = Number(payload.price);
-      if (payload.originalPrice) payload.originalPrice = Number(payload.originalPrice);
+      payload.price = payload.price === '' || payload.price == null ? 0 : Number(payload.price);
+      payload.originalPrice = payload.originalPrice === '' || payload.originalPrice == null ? null : Number(payload.originalPrice);
       payload.saleStartsAt = payload.saleStartsAt || null;
       payload.saleEndsAt = payload.saleEndsAt || null;
       let imageUrl = payload.image || '';

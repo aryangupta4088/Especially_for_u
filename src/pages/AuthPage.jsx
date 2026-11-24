@@ -127,7 +127,9 @@ export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
-  const from = location.state?.from?.pathname || '/';
+  const from = location.state?.from?.pathname
+    ? `${location.state.from.pathname}${location.state.from.search || ''}${location.state.from.hash || ''}`
+    : '/';
   const pendingCartItem = location.state?.pendingCartItem;
 
   const completeSignIn = () => {

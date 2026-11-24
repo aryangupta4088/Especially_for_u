@@ -8,7 +8,7 @@ import {
   UploadCloud, UserRound, UserPlus, Users, WandSparkles, X, Zap,
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   adminNeedsAttention, adminTeam, auditLogs, cmsPages, deliveryAreas, deliverySlots,
   faqs, formatINR, howItWorks, media, notificationLogs, occasions, products as mockProducts, sampleOrders,
@@ -37,6 +37,12 @@ function readStored(key, fallback) {
 }
 function writeStored(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+}
+function readSessionStored(key, fallback) {
+  try { const raw = sessionStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+}
+function writeSessionStored(key, value) {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
 function clearStored(key) {
   try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
@@ -111,6 +117,13 @@ function PriceTag({ product, price }) {
     {product.originalPrice && <span className="original-price">{formatINR(product.originalPrice)}</span>}
     <strong>{product.startingFrom ? 'From ' : ''}{formatINR(current)}</strong>
   </div>;
+}
+
+function FormattedDescription({ text, className }) {
+  const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g);
+  return <p className={className}>{parts.map((part, index) => part.startsWith('**') && part.endsWith('**')
+    ? <strong key={index}>{part.slice(2, -2)}</strong>
+    : <React.Fragment key={index}>{part}</React.Fragment>)}</p>;
 }
 
 function GradientBackground({ variant = 'home', children, className = '' }) {
@@ -373,6 +386,7 @@ function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa
 
 function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const cta = 'Request this item';
   const handlePrimary = () => {
@@ -383,17 +397,17 @@ function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
     }).filter(Boolean);
     const adjustment = options.reduce((sum, option) => sum + option.adjustment, 0);
     const cartItem = { ...product, productId: product.id, price: Number(product.price) + adjustment, selected: options.map((option) => option.value), selectedOptions: options, quantity: 1 };
-    if (!isAuthenticated) return navigate('/login', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
+    if (!isAuthenticated) return navigate('/signup', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
     onAdd?.(cartItem);
     navigate('/checkout');
   };
   return <motion.article className={`product-card ${product.premium ? 'product-premium' : ''}`} whileHover={{ y: -7 }} transition={pageTransition}>
     <div className="product-image-wrap">
       <Link to={`/product/${product.slug}`} className="product-image-link"><img src={product.image} alt={product.name} loading="lazy" /></Link>
-      <div className="product-topline"><Badge tone={product.premium ? 'signature' : product.badge === 'New' ? 'icy' : 'soft'}>{product.badge}</Badge><button className={`heart-button ${isWished ? 'is-wished' : ''}`} onClick={() => onWish(product)} aria-label={`Save ${product.name}`}><Heart size={17} fill={isWished ? 'currentColor' : 'none'} /></button></div>
+      <div className="product-topline"><Badge tone={product.premium ? 'signature' : product.badge === 'New' ? 'icy' : 'soft'}>{product.badge}</Badge><button className={`heart-button ${isWished ? 'is-wished' : ''}`} onClick={() => isAuthenticated ? onWish(product) : navigate('/signup', { state: { from: location } })} aria-label={`Save ${product.name}`}><Heart size={17} fill={isWished ? 'currentColor' : 'none'} /></button></div>
       <Link to={`/product/${product.slug}`} className="quick-view">{product.type === 'CUSTOM_QUOTE' ? 'View brief' : 'Quick view'} <ArrowUpRight size={15} /></Link>
     </div>
-    <div className="product-copy"><div className="product-meta"><span>{categories.find((category) => category.id === product.category || category.slug === product.category)?.name}</span><span className="dot">·</span><span>{product.production}</span></div><Link to={`/product/${product.slug}`} className="product-name">{product.name}</Link><p className="product-description">{product.description}</p><div className="product-bottom"><PriceTag product={product} /><Button variant="mini" onClick={handlePrimary}>{cta}</Button></div>{product.allowCustomRequest !== false && <Link className="custom-version-link" to={`/custom-request?product=${product.slug}`}><WandSparkles size={13} /> Request Custom Version</Link>}</div>
+    <div className="product-copy"><div className="product-meta"><span>{categories.find((category) => category.id === product.category || category.slug === product.category)?.name}</span><span className="dot">·</span><span>{product.production}</span></div><Link to={`/product/${product.slug}`} className="product-name">{product.name}</Link><FormattedDescription className="product-description" text={product.description} /><div className="product-bottom"><PriceTag product={product} /><Button variant="mini" onClick={handlePrimary}>{cta}</Button></div>{product.allowCustomRequest !== false && <Link className="custom-version-link" to={`/custom-request?product=${product.slug}`}><WandSparkles size={13} /> Request Custom Version</Link>}</div>
   </motion.article>;
 }
 
@@ -530,6 +544,7 @@ function ProductPage({ live: providedLive }) {
   const live = providedLive || useLive();
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const { addToCart, onWish, wishlist } = useApp();
   const products = live?.products || [];
@@ -546,26 +561,31 @@ function ProductPage({ live: providedLive }) {
       return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
     }).filter(Boolean);
     const cartItem = { ...product, productId: product.id, price, selected: selectedOptions.map((option) => option.value), selectedOptions, quantity };
-    if (!isAuthenticated) return navigate('/login', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
+    if (!isAuthenticated) return navigate('/signup', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
     addToCart(cartItem);
     navigate('/checkout');
   };
   if (!product) return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><EmptyState title="Product not found" body="This item may have been removed from the shop." onClick={() => navigate('/shop')} /></main><Footer /></GradientBackground>;
-  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => onWish(product)}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><PriceTag product={product} price={price} /><p className="detail-description">{product.description}</p>{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>{product.type === 'CUSTOM_QUOTE' ? 'Request a quote' : 'Request this item'}</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button type="button" onClick={() => document.getElementById("product-reviews")?.scrollIntoView({ behavior: "smooth" })}>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><ProductReviewSection product={product} /><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => isAuthenticated ? onWish(product) : navigate('/signup', { state: { from: location } })}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><PriceTag product={product} price={price} /><FormattedDescription className="detail-description" text={product.description} />{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>{product.type === 'CUSTOM_QUOTE' ? 'Request a quote' : 'Request this item'}</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button type="button" onClick={() => document.getElementById("product-reviews")?.scrollIntoView({ behavior: "smooth" })}>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><ProductReviewSection product={product} /><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CustomRequestPage() {
   const { token, user } = useAuth();
-  const [color, setColor] = useState('Blush pink');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const savedDraft = readSessionStored('efu_custom_request_draft', null);
+  const draftMatchesPath = savedDraft?.search === location.search;
+  const [color, setColor] = useState(draftMatchesPath ? savedDraft.color || 'Blush pink' : 'Blush pink');
   const [files, setFiles] = useState([]);
+  const [needsFileReselection, setNeedsFileReselection] = useState(Boolean(draftMatchesPath && savedDraft.hadFiles));
   const [requestId, setRequestId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', budget: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLink: '' });
+  const [form, setForm] = useState(() => ({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', budget: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLink: '', ...(draftMatchesPath ? savedDraft.form || {} : {}) }));
   const live = useLive();
   const products = live?.products || [];
   const currentSettings = live?.settings || storeSettings;
-  const customPageImage = currentSettings.homepageImages?.customPage || media.collage;
+  const customPageImage = currentSettings.homepageImages?.customPage || media.product3;
   const linkedProduct = products.find((item) => item.slug === new URLSearchParams(window.location.search).get('product'));
   useEffect(() => { if (linkedProduct) setForm((current) => ({ ...current, title: current.title || `Request: ${linkedProduct.name}` })); }, [linkedProduct?.id]);
   const setField = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -595,6 +615,11 @@ function CustomRequestPage() {
       }
       referenceUrls.push(parsedLink.href);
     }
+    if (!token) {
+      writeSessionStored('efu_custom_request_draft', { search: location.search, form, color, hadFiles: files.length > 0 });
+      navigate('/signup', { state: { from: { pathname: location.pathname, search: location.search } } });
+      return;
+    }
     setLoading(true);
     try {
       const referenceFiles = await Promise.all(files.map(async (file) => ({ name: file.name.slice(0, 180), data: await fileToBase64(file) })));
@@ -614,6 +639,7 @@ function CustomRequestPage() {
         throw new Error(data.message || validationMessage || data.error || `Could not send your idea (${response.status}). Please try again.`);
       }
       setRequestId(data.request.id);
+      try { sessionStorage.removeItem('efu_custom_request_draft'); } catch { /* session storage unavailable */ }
     } catch (err) { setError(err.message || 'Could not send your idea.'); }
     finally { setLoading(false); }
   };
@@ -622,12 +648,12 @@ function CustomRequestPage() {
   return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and reference files. We’ll review it, ask questions in your request chat and send you a clear quote.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
     <div className="form-grid"><label className="floating-field"><input required minLength={2} maxLength={120} value={form.name} onChange={setField('name')} placeholder=" " /><span>Your name</span></label><label className="floating-field"><input required type="tel" maxLength={16} inputMode="tel" value={form.phone} onChange={setField('phone')} placeholder=" " /><span>Phone number (we may call)</span></label><label className="floating-field"><input required type="email" maxLength={180} value={form.email} onChange={setField('email')} placeholder=" " /><span>Email address</span></label><label className="floating-field"><input required minLength={3} maxLength={160} value={form.title} onChange={setField('title')} placeholder=" " /><span>Idea title</span></label></div>
     <label className="floating-field floating-textarea"><textarea required minLength={10} maxLength={5000} value={form.description} onChange={setField('description')} placeholder=" " rows="4" /><span>Tell us about it — the story, the vibe, the tiny details...</span></label>
-    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : 'Only the studio team will use these to review your request.'}</small></label></div>
+    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : needsFileReselection ? 'Please choose these files again after creating your account.' : 'Only the studio team will use these to review your request.'}</small></label></div>
     <div className="form-section reference-link-section"><div className="field-title"><strong>Or share an inspiration link</strong><span>Optional</span></div><label className="floating-field"><input type="url" maxLength={2048} value={form.referenceLink} onChange={setField('referenceLink')} placeholder=" " /><span>Paste a Pinterest or Google Drive link</span></label><small>For Google Drive, set access to “Anyone with the link” before pasting it here.</small></div>
     <div className="form-grid"><label className="select-field"><span>Preferred size</span><select value={form.size} onChange={setField('size')}><option>Not sure yet</option><option>Small / desk size</option><option>Medium / shelf size</option><option>Large / statement piece</option></select><ChevronDown size={15} /></label><label className="select-field"><span>Occasion</span><select value={form.occasion} onChange={setField('occasion')}><option>Just because</option><option>Birthday</option><option>Anniversary</option><option>Graduation</option><option>Festive</option></select><ChevronDown size={15} /></label></div>
     <div className="form-section"><div className="field-title"><strong>Preferred colour</strong><span>{color}</span></div><div className="color-swatches">{['Blush pink', 'Lavender', 'Icy blue', 'Surprise me'].map((item, index) => <button type="button" className={color === item ? 'is-selected' : ''} onClick={() => setColor(item)} key={item}><span className={`swatch swatch-${index}`} />{item}</button>)}</div></div>
     <div className="form-grid"><label className="floating-field"><input required value={form.neededBy} onChange={setField('neededBy')} placeholder=" " type="date" /><span>Needed by</span></label><label className="floating-field"><input value={form.budget} onChange={setField('budget')} placeholder=" " /><span>Budget range (₹)</span></label></div><label className="floating-field"><input value={form.pickupLocation} onChange={setField('pickupLocation')} placeholder=" " /><span>Pickup location / area (Muradnagar)</span></label><label className="floating-field"><input value={form.extra} onChange={setField('extra')} placeholder=" " /><span>Anything else?</span></label>
-    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" disabled={loading} className="full-button" icon={<Send size={16} />}>{loading ? 'Sending your idea…' : 'Send my idea'}</Button><p className="form-footnote">No payment until you approve a quote. We save your phone number with the request so we can contact you about it.</p>
+    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" disabled={loading} className="full-button" icon={<Send size={16} />}>{loading ? 'Sending your idea…' : token ? 'Send my idea' : 'Sign up to send your idea'}</Button><p className="form-footnote">No payment until you approve a quote. We save your phone number with the request so we can contact you about it.</p>
     </form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={customPageImage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Request received', 'We review your idea', 'A clear quote arrives in chat', 'You say yes', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
@@ -1176,7 +1202,9 @@ function TrackOrderPage() {
 }
 
 function AboutPage() {
-  return <GradientBackground variant="about"><Navbar cartCount={useApp().cart.length} /><main><section className="container about-hero"><p className="eyebrow"><span className="eyebrow-mark">✦</span> A small story from Muradnagar</p><h1>Made by hands.<br /><em>Held by heart.</em></h1><p>Especially For U started with a few college friends, a table full of craft supplies and a belief that the best gifts carry a little bit of the person who made them.</p><div className="about-hero-image"><img src={media.hero} alt="Pastel handmade crafts in a studio" /></div></section><section className="section story-section"><div className="container story-grid"><div><p className="eyebrow">Why we make</p><h2>Not just a thing.<br /><em>A feeling to keep.</em></h2></div><div><p>We make gifts for the moments that do not fit inside a generic box: the friendship that got you through exams, the room you are slowly making yours, the idea you have been carrying around.</p><p>Every order starts with a real person and a real reason. That is why our pieces are a little slower, a little softer and always made especially for you.</p><Badge tone="icy">Small studio · Muradnagar, UP</Badge></div></div></section><section className="section values-section"><div className="container"><SectionHeading align="center" eyebrow="The way we work" title={<>Three little <em>promises</em></>} /><div className="values-grid"><GlassCard><div className="value-icon"><Heart size={22} /></div><h3>Handmade</h3><p>Small batches, careful hands and the beautiful marks of something made by a person.</p></GlassCard><GlassCard><div className="value-icon"><Users size={22} /></div><h3>Personal</h3><p>We listen before we make, because the details that matter most are usually the smallest.</p></GlassCard><GlassCard><div className="value-icon"><Sparkles size={22} /></div><h3>Made for you</h3><p>No one-size-fits-all magic. Just thoughtful pieces for your exact kind of moment.</p></GlassCard></div></div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  const live = useLive();
+  const aboutImage = live?.settings?.homepageImages?.about || media.product3;
+  return <GradientBackground variant="about"><Navbar cartCount={useApp().cart.length} /><main><section className="container about-hero"><p className="eyebrow"><span className="eyebrow-mark">✦</span> A small story from Muradnagar</p><h1>Made by hands.<br /><em>Held by heart.</em></h1><p>Especially For U started with a few college friends, a table full of craft supplies and a belief that the best gifts carry a little bit of the person who made them.</p><div className="about-hero-image"><img src={aboutImage} alt="Handmade creations from the Especially For U studio" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = media.product3; }} /></div></section><section className="section story-section"><div className="container story-grid"><div><p className="eyebrow">Why we make</p><h2>Not just a thing.<br /><em>A feeling to keep.</em></h2></div><div><p>We make gifts for the moments that do not fit inside a generic box: the friendship that got you through exams, the room you are slowly making yours, the idea you have been carrying around.</p><p>Every order starts with a real person and a real reason. That is why our pieces are a little slower, a little softer and always made especially for you.</p><Badge tone="icy">Small studio · Muradnagar, UP</Badge></div></div></section><section className="section values-section"><div className="container"><SectionHeading align="center" eyebrow="The way we work" title={<>Three little <em>promises</em></>} /><div className="values-grid"><GlassCard><div className="value-icon"><Heart size={22} /></div><h3>Handmade</h3><p>Small batches, careful hands and the beautiful marks of something made by a person.</p></GlassCard><GlassCard><div className="value-icon"><Users size={22} /></div><h3>Personal</h3><p>We listen before we make, because the details that matter most are usually the smallest.</p></GlassCard><GlassCard><div className="value-icon"><Sparkles size={22} /></div><h3>Made for you</h3><p>No one-size-fits-all magic. Just thoughtful pieces for your exact kind of moment.</p></GlassCard></div></div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function ContentPage() {
@@ -1205,6 +1233,7 @@ function AdminProductsPanel() {
   const [editing, setEditing] = useState(null);
   const [formMsg, setFormMsg] = useState({ type: '', text: '' });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const descriptionRef = useRef(null);
   const [form, setForm] = useState({
     name: '', slug: '', category: '', type: 'READYMADE', price: '', originalPrice: '', saleStartsAt: '', saleEndsAt: '', badge: 'New',
     production: 'Ready in 3 days', description: '', audience: 'her', disclaimer: 'Each piece is unique and may vary slightly.',
@@ -1240,6 +1269,24 @@ function AdminProductsPanel() {
   useEffect(() => { refresh(); }, []);
 
   const slugify = (txt) => txt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+
+  const insertDescriptionFormatting = (kind) => {
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+    const value = form.description || '';
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? start;
+    const selected = value.slice(start, end);
+    const insertion = kind === 'bold' ? (selected ? `**${selected}**` : '****') : '\n';
+    const updated = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
+    const selectionStart = kind === 'bold' ? start + 2 : start + 1;
+    const selectionEnd = kind === 'bold' && selected ? selectionStart + selected.length : selectionStart;
+    setForm((current) => ({ ...current, description: updated }));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    });
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -1444,10 +1491,14 @@ function AdminProductsPanel() {
               <label className="floating-field"><input type="datetime-local" value={form.saleEndsAt} onChange={(e) => setForm({ ...form, saleEndsAt: e.target.value })} /><span>Discount ends</span></label>
               <small style={{ gridColumn: '1 / -1', color: 'var(--muted)', fontSize: 11 }}>Set the original price and a lower sale price above. Leave dates blank for a discount with no schedule.</small>
             </div>
-            <label className="floating-field floating-textarea">
-              <textarea rows="3" placeholder=" " value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              <span>Description</span>
-            </label>
+            <div className="product-description-editor">
+              <div className="description-editor-toolbar"><span>Use Enter for a new paragraph. Select text and make it bold.</span><div><button type="button" onClick={() => insertDescriptionFormatting('bold')} aria-label="Make selected text bold"><strong>B</strong> Bold</button><button type="button" onClick={() => insertDescriptionFormatting('newline')}>↵ New line</button></div></div>
+              <label className="floating-field floating-textarea">
+                <textarea ref={descriptionRef} rows="5" placeholder=" " value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <span>Product description</span>
+              </label>
+              <small>Bold text is saved using **double asterisks** and displayed with formatting on the product page.</small>
+            </div>
             <div>
               <p className="field-label" style={{ marginBottom: 8 }}>Occasions</p>
               <div className="mini-chips" style={{ justifyContent: 'flex-start' }}>
@@ -2032,6 +2083,7 @@ function AdminHomepagePanel({ onManageCategories }) {
     { key: 'hero', title: 'Hero Polaroid · photo 1', detail: 'First photo in the Polaroid collage on the right side of the homepage hero.' },
     { key: 'heroPolaroid2', title: 'Hero Polaroid · photo 2', detail: 'Second photo in the Polaroid collage on the right side of the homepage hero.' },
     { key: 'heroPolaroid3', title: 'Hero Polaroid · photo 3', detail: 'Third photo in the Polaroid collage on the right side of the homepage hero.' },
+    { key: 'about', title: 'About Us hero image', detail: 'Main image displayed near the top of the About Us page.' },
     { key: 'explore', title: 'Explore our creations', detail: 'A supporting image beside the Explore section heading.' },
     { key: 'homeIdeaBack', title: 'Homepage idea section · back', detail: 'Back image in the “Have an idea?” image stack.' },
     { key: 'homeIdeaMiddle', title: 'Homepage idea section · middle', detail: 'Middle image in the “Have an idea?” image stack.' },
@@ -2297,10 +2349,15 @@ function OccasionRoute() {
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
+  const location = useLocation();
   const [cart, setCart] = useState(() => isAuthenticated ? readStored('efu_cart', []) : []);
   const [wishlist, setWishlist] = useState(() => readStored('efu_wishlist', []));
   const [toast, setToast] = useState(null);
   const reduced = useReducedMotion();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
 
   const addToCart = (product) => {
     const key = `${product.id}-${(product.selected || []).join('-') || 'default'}`;
@@ -2341,8 +2398,16 @@ function AppContent() {
 
   return (
     <LiveDataProvider>
-      <AnimatePresence mode="wait">
-          <Routes>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={`${location.pathname}${location.search}`}
+          className="route-transition"
+          initial={{ opacity: 0, y: reduced ? 0 : 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: reduced ? 0 : -4 }}
+          transition={{ duration: reduced ? 0.01 : 0.2, ease: 'easeOut' }}
+        >
+          <Routes location={location}>
             {/* Public storefront routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/shop" element={<ShopPage />} />
@@ -2359,7 +2424,7 @@ function AppContent() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Actions and customer data require a customer account */}
-            <Route path="/custom-request" element={<ProtectedRoute signupRequired><CustomRequestPage /></ProtectedRoute>} />
+            <Route path="/custom-request" element={<CustomRequestPage />} />
             <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
             <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
             <Route path="/track-order" element={<Navigate to="/account" replace />} />
@@ -2375,7 +2440,8 @@ function AppContent() {
             {/* Catch-all Route */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </AnimatePresence>
+        </motion.div>
+      </AnimatePresence>
         <AnimatePresence>
           {toast && (
             <motion.div className="toast" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}>

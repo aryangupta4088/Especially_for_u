@@ -557,9 +557,8 @@ function ProductPage({ live: providedLive }) {
 function CustomRequestPage() {
   const { user } = useAuth();
   const [color, setColor] = useState('Blush pink');
-  const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLink: '' });
+  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLinks: ['', '', ''] });
   const live = useLive();
   const products = live?.products || [];
   const currentSettings = live?.settings || storeSettings;
@@ -567,12 +566,6 @@ function CustomRequestPage() {
   const linkedProduct = products.find((item) => item.slug === new URLSearchParams(window.location.search).get('product'));
   useEffect(() => { if (linkedProduct) setForm((current) => ({ ...current, title: current.title || `Request: ${linkedProduct.name}` })); }, [linkedProduct?.id]);
   const setField = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
-  const chooseFiles = (event) => {
-    const selected = Array.from(event.target.files || []).slice(0, 5);
-    const invalid = selected.find((file) => !/^(image|video)\//.test(file.type) || file.size > 8 * 1024 * 1024);
-    if (invalid) { setError(`${invalid.name}: choose an image or video up to 8 MB.`); setFiles([]); event.target.value = ''; return; }
-    setError(''); setFiles(selected);
-  };
   const submitRequest = (event) => {
     event.preventDefault(); setError('');
     const phone = form.phone.trim().replace(/[\s()-]/g, '');
@@ -583,13 +576,14 @@ function CustomRequestPage() {
     if (form.title.trim().length < 3) { setError('Please give your idea a title of at least 3 characters.'); return; }
     if (description.length < 10) { setError('Please describe your idea in at least 10 characters.'); return; }
     if (description.length > 5000) { setError('Your idea details must be 5,000 characters or fewer, including additional details.'); return; }
-    let referenceLink = '';
-    if (form.referenceLink.trim()) {
+    const referenceLinks = [];
+    for (const [index, value] of (form.referenceLinks || []).entries()) {
+      if (!value.trim()) continue;
       try {
-        const parsed = new URL(form.referenceLink.trim());
+        const parsed = new URL(value.trim());
         if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
-        referenceLink = parsed.href;
-      } catch { setError('Please paste a valid Pinterest or Google Drive link starting with http:// or https://.'); return; }
+        referenceLinks.push({ index, url: parsed.href });
+      } catch { setError(`Please enter a valid web link in Reference link ${index + 1}.`); return; }
     }
     const lines = [
       'Hi Especially For U! I’d like to inquire about a custom idea.',
@@ -604,23 +598,21 @@ function CustomRequestPage() {
       `Occasion: ${form.occasion}`,
       `Preferred colour: ${color}`,
       `Pickup area: ${form.pickupLocation || 'To be discussed'}`,
-      ...(referenceLink ? [`Inspiration link: ${referenceLink.slice(0, 300)}${referenceLink.length > 300 ? '…' : ''}`] : []),
-      ...(files.length ? [`I’ll attach ${files.length} reference file${files.length === 1 ? '' : 's'} in this WhatsApp chat.`] : []),
+      ...referenceLinks.map(({ index, url }) => `Inspiration link ${index + 1}: ${url}`),
     ];
     const url = whatsappLink(lines.join('\n'));
     const opened = window.open(url, '_blank', 'noopener,noreferrer');
     if (!opened) window.location.href = url;
   };
   if (!currentSettings.acceptingCustomRequests) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">A short studio pause</p><h1>Custom requests are <em>resting for now.</em></h1><p>{currentSettings.pauseMessage} You can still browse the shop and save a little something for later.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Browse the shop</Button></main><Footer /></GradientBackground>;
-  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and reference files. We’ll review it, talk through the details with you directly on WhatsApp.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
+  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and any inspiration links. We’ll review it and talk through the details with you directly on WhatsApp.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
     <div className="form-grid"><label className="floating-field"><input required minLength={2} maxLength={120} value={form.name} onChange={setField('name')} placeholder=" " /><span>Your name</span></label><label className="floating-field"><input required type="tel" maxLength={16} inputMode="tel" value={form.phone} onChange={setField('phone')} placeholder=" " /><span>Phone number (we may call)</span></label><label className="floating-field"><input required type="email" maxLength={180} value={form.email} onChange={setField('email')} placeholder=" " /><span>Email address</span></label><label className="floating-field"><input required minLength={3} maxLength={160} value={form.title} onChange={setField('title')} placeholder=" " /><span>Idea title</span></label></div>
     <label className="floating-field floating-textarea"><textarea required minLength={10} maxLength={5000} value={form.description} onChange={setField('description')} placeholder=" " rows="4" /><span>Tell us about it — the story, the vibe, the tiny details...</span></label>
-    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : 'Attach these files in WhatsApp after the message opens.'}</small></label></div>
-    <div className="form-section reference-link-section"><div className="field-title"><strong>Or share an inspiration link</strong><span>Optional</span></div><label className="floating-field"><input type="url" maxLength={2048} value={form.referenceLink} onChange={setField('referenceLink')} placeholder=" " /><span>Paste a Pinterest or Google Drive link</span></label><small>For Google Drive, set access to “Anyone with the link” before pasting it here.</small></div>
+    <div className="form-section reference-link-section"><div className="field-title"><strong>Inspiration links</strong><span>Optional · up to 3 links</span></div><div style={{ display: 'grid', gap: 12 }}>{(form.referenceLinks || ['', '', '']).map((link, index) => <label className="floating-field" key={index}><input type="url" maxLength={700} value={link} onChange={(event) => setForm((current) => { const referenceLinks = [...(current.referenceLinks || ['', '', ''])]; referenceLinks[index] = event.target.value; return { ...current, referenceLinks }; })} placeholder=" " /><span>Link {index + 1} · Pinterest, Google Drive, or image URL</span></label>)}</div><small>For Google Drive, set access to “Anyone with the link.” Links will be included in your WhatsApp message.</small></div>
     <div className="form-grid"><label className="select-field"><span>Preferred size</span><select value={form.size} onChange={setField('size')}><option>Not sure yet</option><option>Small / desk size</option><option>Medium / shelf size</option><option>Large / statement piece</option></select><ChevronDown size={15} /></label><label className="select-field"><span>Occasion</span><select value={form.occasion} onChange={setField('occasion')}><option>Just because</option><option>Birthday</option><option>Anniversary</option><option>Graduation</option><option>Festive</option></select><ChevronDown size={15} /></label></div>
     <div className="form-section"><div className="field-title"><strong>Preferred colour</strong><span>{color}</span></div><div className="color-swatches">{['Blush pink', 'Lavender', 'Icy blue', 'Surprise me'].map((item, index) => <button type="button" className={color === item ? 'is-selected' : ''} onClick={() => setColor(item)} key={item}><span className={`swatch swatch-${index}`} />{item}</button>)}</div></div>
     <div className="form-grid"><label className="floating-field"><input required value={form.neededBy} onChange={setField('neededBy')} placeholder=" " type="date" /><span>Needed by</span></label></div><label className="floating-field"><input value={form.pickupLocation} onChange={setField('pickupLocation')} placeholder=" " /><span>Pickup location / area (Muradnagar)</span></label><label className="floating-field"><input value={form.extra} onChange={setField('extra')} placeholder=" " /><span>Anything else?</span></label>
-    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" className="full-button" icon={<MessageCircle size={16} />}>Inquire on WhatsApp</Button><p className="form-footnote">WhatsApp opens with your details ready. Check the message and tap Send; attach any reference photos or videos in that chat.</p>
+    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" className="full-button" icon={<MessageCircle size={16} />}>Inquire on WhatsApp</Button><p className="form-footnote">WhatsApp opens with your details and links ready. Check the message and tap Send.</p>
     </form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={customPageImage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Your message arrives', 'We review your idea', 'We reply on WhatsApp', 'We confirm the details', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 

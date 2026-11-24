@@ -82,6 +82,8 @@ img { display: block; width: 100%; }
 .button:active { transform: translateY(-1px) scale(.98); }
 .button-primary { color: var(--ink); background: linear-gradient(100deg, var(--blush), var(--orchid)); box-shadow: 0 12px 25px rgba(255,175,204,.26); }
 .button-primary:hover { box-shadow: 0 16px 32px rgba(255,175,204,.38); }
+.button.product-whatsapp-cta { background: linear-gradient(100deg, var(--blush), var(--orchid)); color: var(--ink); box-shadow: 0 10px 24px rgba(255,175,204,.24); }
+.button.product-whatsapp-cta:hover { box-shadow: 0 14px 30px rgba(255,175,204,.36); }
 .button-secondary { background: rgba(255,255,255,.55); border: 1px solid rgba(59,42,74,.1); color: var(--ink); box-shadow: 0 8px 22px rgba(76,48,86,.05); }
 .button-ghost { background: transparent; color: var(--muted); padding-left: 0; padding-right: 0; border-radius: 0; border-bottom: 1px solid var(--muted); min-height: 32px; }
 .button-mini { min-height: 33px; padding: 0 12px; font-size: 10px; background: rgba(59,42,74,.05); color: var(--ink); }

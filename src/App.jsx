@@ -38,12 +38,6 @@ function readStored(key, fallback) {
 function writeStored(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
 }
-function readSessionStored(key, fallback) {
-  try { const raw = sessionStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
-}
-function writeSessionStored(key, value) {
-  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
-}
 function clearStored(key) {
   try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
 }
@@ -124,6 +118,23 @@ function FormattedDescription({ text, className }) {
   return <p className={className}>{parts.map((part, index) => part.startsWith('**') && part.endsWith('**')
     ? <strong key={index}>{part.slice(2, -2)}</strong>
     : <React.Fragment key={index}>{part}</React.Fragment>)}</p>;
+}
+
+function whatsappLink(message) {
+  return `https://wa.me/919997837648?text=${encodeURIComponent(message)}`;
+}
+
+function productInquiryLink(product, options = [], quantity = 1) {
+  const lines = [
+    'Hi Especially For U! I’m interested in this product.',
+    `Product: ${product.name}`,
+    `Product ID: ${product.id}`,
+    `Product page: ${window.location.origin}/product/${product.slug}`,
+  ];
+  if (options.length) lines.push(`Preferences: ${options.map((option) => `${option.label}: ${option.value}`).join(', ')}`);
+  if (quantity > 1) lines.push(`Quantity: ${quantity}`);
+  lines.push('Could you please share availability and details?');
+  return whatsappLink(lines.join('\n'));
 }
 
 function GradientBackground({ variant = 'home', children, className = '' }) {
@@ -284,11 +295,6 @@ function Navbar({ cartCount, wishlistCount, settings }) {
               </div>
             )}
 
-            {isAuthenticated && <Link to="/cart" className="icon-button nav-cart" aria-label="Cart">
-              <ShoppingBag size={18} />
-              {cartCount > 0 && <span className="count-badge">{cartCount}</span>}
-            </Link>}
-
             <button className="icon-button menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Open menu">
               <Menu size={20} />
             </button>
@@ -317,7 +323,7 @@ function Navbar({ cartCount, wishlistCount, settings }) {
                   </div>
                   <div style={{ display: 'grid', gap: '8px' }}>
                     {user && <NavLink to="/account" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '10px', background: 'rgba(90,63,86,.05)', textDecoration: 'none', color: 'var(--ink)', fontSize: '13px', fontWeight: 500 }}>
-                      My Account & Orders <ArrowRight size={14} />
+                      My Account <ArrowRight size={14} />
                     </NavLink>}
                     {(isAdmin || adminSession) && (
                       <NavLink to="/admin" onClick={() => setMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '10px', background: 'rgba(197,90,131,.12)', textDecoration: 'none', color: '#b24d76', fontSize: '13px', fontWeight: 600 }}>
@@ -368,8 +374,8 @@ function Footer() {
   return <footer className="site-footer">
     <div className="container footer-grid">
       <div className="footer-brand"><Link to="/" className="wordmark"><span>Especially</span><em>For U</em><i>✦</i></Link><p>Handmade gifts, soft keepsakes and tiny worlds made especially for your people.</p><Badge tone="icy">Delivering only in Muradnagar</Badge></div>
-      <div><p className="footer-label">Explore</p><Link to="/shop">Shop ready-made</Link><Link to="/custom-request">Create something custom</Link><Link to="/about">Our story</Link></div>
-      <div><p className="footer-label">Need a little help?</p><Link to="/account">Your account & chats</Link><Link to="/pages/faq">FAQs</Link><a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a><a href="https://wa.me/919997837648">WhatsApp us</a></div>
+      <div><p className="footer-label">Explore</p><Link to="/shop">Shop ready-made</Link><Link to="/custom-request">Custom ideas on WhatsApp</Link><Link to="/about">Our story</Link></div>
+      <div><p className="footer-label">Need a little help?</p><Link to="/account">Your account</Link><Link to="/pages/faq">FAQs</Link><a href="mailto:hello@especiallyforu.in">hello@especiallyforu.in</a><a href="https://wa.me/919997837648">Inquire on WhatsApp</a></div>
       <div className="footer-social"><p className="footer-label">Find us in the wild</p><div className="social-row"><a href="https://instagram.com" aria-label="Instagram"><Camera size={18} /></a><a href="https://wa.me/919997837648" aria-label="WhatsApp"><MessageCircle size={18} /></a></div><p className="small-note">Made with soft corners and a lot of care.</p></div>
     </div>
     <div className="container footer-bottom">
@@ -382,32 +388,20 @@ function Footer() {
   </footer>;
 }
 
-function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa.me/919997837648" aria-label="Chat on WhatsApp"><MessageCircle size={21} /><span>Say hello</span></a>; }
+function WhatsAppFloat() { return <a className="whatsapp-float" href="https://wa.me/919997837648" aria-label="Inquire on WhatsApp"><MessageCircle size={21} /><span>Inquire on WhatsApp</span></a>; }
 
 function ProductCard({ product, onAdd, onWish, isWished, categories = [] }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
-  const cta = 'Request this item';
-  const handlePrimary = () => {
-    if (product.type === 'CUSTOM_QUOTE') return navigate(`/custom-request?product=${product.slug}`);
-    const options = (product.options || []).map((option) => {
-      const value = option.values?.[0];
-      return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
-    }).filter(Boolean);
-    const adjustment = options.reduce((sum, option) => sum + option.adjustment, 0);
-    const cartItem = { ...product, productId: product.id, price: Number(product.price) + adjustment, selected: options.map((option) => option.value), selectedOptions: options, quantity: 1 };
-    if (!isAuthenticated) return navigate('/signup', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
-    onAdd?.(cartItem);
-    navigate('/checkout');
-  };
+  const defaultOptions = (product.options || []).map((option) => option.values?.[0] ? { label: option.label, value: option.values[0].name } : null).filter(Boolean);
   return <motion.article className={`product-card ${product.premium ? 'product-premium' : ''}`} whileHover={{ y: -7 }} transition={pageTransition}>
     <div className="product-image-wrap">
       <Link to={`/product/${product.slug}`} className="product-image-link"><img src={product.image} alt={product.name} loading="lazy" /></Link>
       <div className="product-topline"><Badge tone={product.premium ? 'signature' : product.badge === 'New' ? 'icy' : 'soft'}>{product.badge}</Badge><button className={`heart-button ${isWished ? 'is-wished' : ''}`} onClick={() => isAuthenticated ? onWish(product) : navigate('/signup', { state: { from: location } })} aria-label={`Save ${product.name}`}><Heart size={17} fill={isWished ? 'currentColor' : 'none'} /></button></div>
       <Link to={`/product/${product.slug}`} className="quick-view">{product.type === 'CUSTOM_QUOTE' ? 'View brief' : 'Quick view'} <ArrowUpRight size={15} /></Link>
     </div>
-    <div className="product-copy"><div className="product-meta"><span>{categories.find((category) => category.id === product.category || category.slug === product.category)?.name}</span><span className="dot">·</span><span>{product.production}</span></div><Link to={`/product/${product.slug}`} className="product-name">{product.name}</Link><FormattedDescription className="product-description" text={product.description} /><div className="product-bottom"><PriceTag product={product} /><Button variant="mini" onClick={handlePrimary}>{cta}</Button></div>{product.allowCustomRequest !== false && <Link className="custom-version-link" to={`/custom-request?product=${product.slug}`}><WandSparkles size={13} /> Request Custom Version</Link>}</div>
+    <div className="product-copy"><div className="product-meta"><span>{categories.find((category) => category.id === product.category || category.slug === product.category)?.name}</span><span className="dot">·</span><span>{product.production}</span></div><Link to={`/product/${product.slug}`} className="product-name">{product.name}</Link><FormattedDescription className="product-description" text={product.description} /><div className="product-bottom"><a className="button button-mini product-whatsapp-cta" href={productInquiryLink(product, defaultOptions)} target="_blank" rel="noreferrer"><MessageCircle size={15} /> Inquire on WhatsApp</a></div>{product.allowCustomRequest !== false && <Link className="custom-version-link" to={`/custom-request?product=${product.slug}`}><WandSparkles size={13} /> Ask about a custom version</Link>}</div>
   </motion.article>;
 }
 
@@ -445,16 +439,16 @@ function HomePage({ live: providedLive }) {
       .then((data) => setHomeReviews((data?.reviews || []).slice(0, 6))).catch(() => setHomeReviews([]));
   }, []);
   return <GradientBackground variant="home"><Navbar cartCount={useApp().cart.length} wishlistCount={wishlist.length} settings={settings} /><main>
-    <section className="hero-section"><div className="container hero-content"><div className="hero-copy"><p className="eyebrow hero-eyebrow"><span className="eyebrow-mark">✦</span> Small studio · big feelings</p><h1>Made <em>Especially</em><br />For U <span className="sparkle-inline">✦</span></h1><p className="hero-subtitle">{settings.tagline || 'Custom gifts, handmade creations & little things made just for you.'}</p><div className="hero-actions"><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Shop ready-made</Button><Button as={Link} to="/custom-request" variant="secondary" icon={<WandSparkles size={17} />}>Create something custom</Button></div><div className="hero-note"><span className="hero-note-mark">♡</span><span>Made slowly in Muradnagar<br /><strong>for your favourite people.</strong></span></div></div><div className="hero-polaroids" role="group" aria-label="Handmade creations"><span className="hero-polaroid-sparkle hero-polaroid-sparkle-one" aria-hidden="true">✦</span><span className="hero-polaroid-sparkle hero-polaroid-sparkle-two" aria-hidden="true">♡</span>{heroPolaroids.map((photo, index) => <figure className={`hero-polaroid ${photo.className}`} key={photo.key}><img src={photo.src} alt={`Especially For U creation ${index + 1}`} loading={index === 0 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} /><figcaption>{photo.caption}</figcaption></figure>)}</div></div><a href="#explore" className="scroll-cue"><span>Scroll to explore</span><ArrowDown size={16} /></a></section>
+    <section className="hero-section"><div className="container hero-content"><div className="hero-copy"><p className="eyebrow hero-eyebrow"><span className="eyebrow-mark">✦</span> Small studio · big feelings</p><h1>Made <em>Especially</em><br />For U <span className="sparkle-inline">✦</span></h1><p className="hero-subtitle">{settings.tagline || 'Custom gifts, handmade creations & little things made just for you.'}</p><div className="hero-actions"><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Shop ready-made</Button><Button as={Link} to="/custom-request" variant="secondary" icon={<MessageCircle size={17} />}>Inquire on WhatsApp</Button></div><div className="hero-note"><span className="hero-note-mark">♡</span><span>Made slowly in Muradnagar<br /><strong>for your favourite people.</strong></span></div></div><div className="hero-polaroids" role="group" aria-label="Handmade creations"><span className="hero-polaroid-sparkle hero-polaroid-sparkle-one" aria-hidden="true">✦</span><span className="hero-polaroid-sparkle hero-polaroid-sparkle-two" aria-hidden="true">♡</span>{heroPolaroids.map((photo, index) => <figure className={`hero-polaroid ${photo.className}`} key={photo.key}><img src={photo.src} alt={`Especially For U creation ${index + 1}`} loading={index === 0 ? 'eager' : 'lazy'} fetchPriority={index === 0 ? 'high' : 'auto'} /><figcaption>{photo.caption}</figcaption></figure>)}</div></div><a href="#explore" className="scroll-cue"><span>Scroll to explore</span><ArrowDown size={16} /></a></section>
     <Marquee />
     <section className="section section-explore" id="explore"><div className="container"><div className={`explore-heading ${homepageImages.explore ? 'has-image' : ''}`}><SectionHeading eyebrow="Made by hand, chosen by heart" title={<>Explore our <em>creations</em></>} body="From a tiny note card to a whole little world — find something that feels like them." action={<Button as={Link} to="/shop" variant="ghost" icon={<ArrowUpRight size={16} />}>See all pieces</Button>} />{homepageImages.explore && <img className="explore-heading-image" src={homepageImages.explore} alt="A selection of handmade creations" />}</div><div className="category-bento">{categories.map((category, index) => <CategoryCard category={category} index={index} key={category.id} />)}</div></div></section>
     <section className="section section-featured"><div className="container"><SectionHeading eyebrow="A little something special" title={<>Made Especially <em>For U</em></>} body="Our most-loved handmade pieces, ready to become part of your story." action={<Button as={Link} to="/shop" variant="ghost" icon={<ArrowRight size={16} />}>Shop all</Button>} /><div className="product-grid featured-grid">{featured.map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div></div></section>
-    <section className="section custom-feature"><div className="container custom-feature-inner"><div className="custom-feature-copy"><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Tell us the story, the colours, the tiny detail you can’t stop thinking about. We’ll turn it into something you can hold.</p><Button as={Link} to="/custom-request" icon={<ArrowUpRight size={17} />}>Start a request</Button><div className="custom-feature-foot"><span>01</span><span className="foot-line" /><span>Made for your moment</span></div></div><div className="custom-image-stack"><div className="stack-card stack-back"><img src={homepageImages.homeIdeaBack || media.product3} alt="Pastel handmade art" /></div><div className="stack-card stack-middle"><img src={homepageImages.homeIdeaMiddle || media.collage} alt="Layered handmade craft details" /></div><div className="stack-card stack-front"><img src={homepageImages.homeIdeaFront || media.product4} alt="Polaroid memory keepsake" /><span className="stack-tag">your story, made tangible</span></div></div></div></section>
+    <section className="section custom-feature"><div className="container custom-feature-inner"><div className="custom-feature-copy"><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Tell us the story, the colours, the tiny detail you can’t stop thinking about. We’ll turn it into something you can hold.</p><Button as={Link} to="/custom-request" icon={<MessageCircle size={17} />}>Inquire on WhatsApp</Button><div className="custom-feature-foot"><span>01</span><span className="foot-line" /><span>Made for your moment</span></div></div><div className="custom-image-stack"><div className="stack-card stack-back"><img src={homepageImages.homeIdeaBack || media.product3} alt="Pastel handmade art" /></div><div className="stack-card stack-middle"><img src={homepageImages.homeIdeaMiddle || media.collage} alt="Layered handmade craft details" /></div><div className="stack-card stack-front"><img src={homepageImages.homeIdeaFront || media.product4} alt="Polaroid memory keepsake" /><span className="stack-tag">your story, made tangible</span></div></div></div></section>
     <section className="section section-occasions"><div className="container"><SectionHeading eyebrow="Shop by feeling" title={<>For all the <em>little occasions</em></>} body="A thoughtful something for the birthday, the almost-anniversary, or the random Tuesday that deserves a little sparkle." /><div className="occasion-chips">{occasions.map((occasion, index) => <Link key={occasion} to={`/occasion/${occasion.toLowerCase().replaceAll(' ', '-')}`} className={`occasion-chip ${index === 0 ? 'is-active' : ''}`}>{occasion}<ArrowUpRight size={14} /></Link>)}</div><div className="occasion-rail">{products.slice(4, 8).map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div></div></section>
     <section className="section how-section"><div className="container"><SectionHeading align="center" eyebrow="The easy, lovely part" title={<>How it <em>works</em></>} body="No mystery, no awkward forms. Just a simple path from your idea to something real." /><div className="how-grid">{howItWorks.map((step, index) => <motion.div className="how-step" key={step.number} initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.08, ...pageTransition }}><div className="how-number">{step.number}</div><div className="how-icon"><Icon name={step.icon} size={22} /></div><h3>{step.title}</h3><p>{step.text}</p>{index < howItWorks.length - 1 && <ArrowRight className="how-arrow" size={18} />}</motion.div>)}</div></div></section>
 
     <section className="section home-reviews-section"><div className="container"><SectionHeading eyebrow="A little love from our customers" title={<>Notes from <em>happy hearts</em></>} body="Every review is a little reminder of why we make things by hand." />{homeReviews.length ? <div className="reviews-grid">{homeReviews.map((review) => <article className="review-card" key={review.id}><PinkStars rating={Number(review.rating)} /><p>“{review.comment}”</p>{review.imageUrl && <img className="home-review-photo" src={review.imageUrl} alt={`Photo from ${review.customerName || 'customer'} review`} loading="lazy" />}<div><strong>{review.customerName || 'Customer'}</strong><span>{review.productName || 'Especially For U'}</span></div></article>)}</div> : <GlassCard className="home-reviews-empty"><PinkStars rating={5} /><p>Customer reviews will appear here after they are approved by the studio.</p></GlassCard>}</div></section>
-    <section className="final-cta"><div className="container"><div className="final-cta-card"><div className="sparkle sparkle-1">✦</div><div className="sparkle sparkle-2">✧</div><p className="eyebrow">A soft place for big ideas</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Bring the half-formed thought. We’ll bring the handmade magic.</p><Button as={Link} to="/custom-request" variant="light" icon={<ArrowUpRight size={17} />}>Create something custom</Button></div></div></section>
+    <section className="final-cta"><div className="container"><div className="final-cta-card"><div className="sparkle sparkle-1">✦</div><div className="sparkle sparkle-2">✧</div><p className="eyebrow">A soft place for big ideas</p><h2>Have an idea?<br /><em>Let’s make it real.</em></h2><p>Bring the half-formed thought. We’ll bring the handmade magic.</p><Button as={Link} to="/custom-request" variant="light" icon={<MessageCircle size={17} />}>Inquire on WhatsApp</Button></div></div></section>
   </main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
@@ -481,12 +475,11 @@ function ShopPage({ initialCategory = 'all', initialOccasion = 'all', live: prov
       const matchesCustom = !customOnly || product.customizable;
       return matchesQuery && matchesCategory && matchesOccasion && matchesCustom;
     });
-    if (sort === 'low') return [...list].sort((a, b) => a.price - b.price);
-    if (sort === 'high') return [...list].sort((a, b) => b.price - a.price);
+    if (sort === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name));
     return list;
   }, [category, customOnly, occasion, products, query, selectedCategory, sort]);
   const clear = () => { setQuery(''); setCategory('all'); setOccasion('all'); setCustomOnly(false); };
-  return <GradientBackground variant="shop"><Navbar cartCount={useApp().cart.length} /><main><section className="page-intro container"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The little shop</p><h1>Find your <em>something.</em></h1><p>Handmade gifts, soft keepsakes and tiny delights — all ready to make someone’s day.</p></div><div className="shop-note"><span className="mini-dot" /> Delivering only in <strong>Muradnagar</strong></div></section><section className="shop-layout container"><aside className={`filter-panel ${filtersOpen ? 'is-open' : ''}`}><div className="filter-head"><h3>Filter the feeling</h3><button className="icon-button filter-close" onClick={() => setFiltersOpen(false)}><X size={18} /></button></div><label className="field-label">Search</label><div className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try “memory” or “flowers”" /></div><label className="field-label">Categories</label><div className="filter-list"><button className={category === 'all' ? 'is-selected' : ''} onClick={() => setCategory('all')}>All creations <span>{products.length}</span></button>{categories.map((item) => <button className={category === item.id || category === item.slug ? 'is-selected' : ''} onClick={() => setCategory(item.id || item.slug)} key={item.id || item.slug}>{item.name}<span>{products.filter((product) => product.category === item.id || product.category === item.slug).length}</span></button>)}</div><label className="field-label">Occasion</label><div className="mini-chips">{occasions.map((item) => <button className={occasion === item.toUpperCase().replaceAll(' ', '_') ? 'is-selected' : ''} onClick={() => setOccasion(item.toUpperCase().replaceAll(' ', '_'))} key={item}>{item}</button>)}</div><label className="toggle-row"><span><strong>Customisable only</strong><small>Show pieces made around your details</small></span><button className={`toggle ${customOnly ? 'is-on' : ''}`} onClick={() => setCustomOnly(!customOnly)} aria-label="Toggle customisable products"><span /></button></label><button className="clear-filters" onClick={clear}>Clear all filters</button></aside><div className="shop-results"><div className="shop-toolbar"><button className="filter-trigger button button-secondary" onClick={() => setFiltersOpen(true)}><Filter size={16} /> Filters</button><div><span className="results-count">{filtered.length} pieces to love</span>{(query || category !== 'all' || occasion !== 'all' || customOnly) && <button className="active-filter" onClick={clear}>Clear <X size={12} /></button>}</div><label className="sort-field">Sort by <select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option></select><ChevronDown size={15} /></label></div>{filtered.length ? <div className="product-grid">{filtered.map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div> : <EmptyState title="Nothing here yet" body="Try a softer search or clear a filter — your little something is probably nearby." onClick={clear} />}</div></section></main></GradientBackground>;
+  return <GradientBackground variant="shop"><Navbar cartCount={useApp().cart.length} /><main><section className="page-intro container"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The little shop</p><h1>Find your <em>something.</em></h1><p>Handmade gifts, soft keepsakes and tiny delights — all ready to make someone’s day.</p></div><div className="shop-note"><span className="mini-dot" /> Delivering only in <strong>Muradnagar</strong></div></section><section className="shop-layout container"><aside className={`filter-panel ${filtersOpen ? 'is-open' : ''}`}><div className="filter-head"><h3>Filter the feeling</h3><button className="icon-button filter-close" onClick={() => setFiltersOpen(false)}><X size={18} /></button></div><label className="field-label">Search</label><div className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try “memory” or “flowers”" /></div><label className="field-label">Categories</label><div className="filter-list"><button className={category === 'all' ? 'is-selected' : ''} onClick={() => setCategory('all')}>All creations <span>{products.length}</span></button>{categories.map((item) => <button className={category === item.id || category === item.slug ? 'is-selected' : ''} onClick={() => setCategory(item.id || item.slug)} key={item.id || item.slug}>{item.name}<span>{products.filter((product) => product.category === item.id || product.category === item.slug).length}</span></button>)}</div><label className="field-label">Occasion</label><div className="mini-chips">{occasions.map((item) => <button className={occasion === item.toUpperCase().replaceAll(' ', '_') ? 'is-selected' : ''} onClick={() => setOccasion(item.toUpperCase().replaceAll(' ', '_'))} key={item}>{item}</button>)}</div><label className="toggle-row"><span><strong>Customisable only</strong><small>Show pieces made around your details</small></span><button className={`toggle ${customOnly ? 'is-on' : ''}`} onClick={() => setCustomOnly(!customOnly)} aria-label="Toggle customisable products"><span /></button></label><button className="clear-filters" onClick={clear}>Clear all filters</button></aside><div className="shop-results"><div className="shop-toolbar"><button className="filter-trigger button button-secondary" onClick={() => setFiltersOpen(true)}><Filter size={16} /> Filters</button><div><span className="results-count">{filtered.length} pieces to love</span>{(query || category !== 'all' || occasion !== 'all' || customOnly) && <button className="active-filter" onClick={clear}>Clear <X size={12} /></button>}</div><label className="sort-field">Sort by <select value={sort} onChange={(event) => setSort(event.target.value)}><option value="featured">Featured</option><option value="name">Name: A to Z</option></select><ChevronDown size={15} /></label></div>{filtered.length ? <div className="product-grid">{filtered.map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(product.id)} categories={categories} />)}</div> : <EmptyState title="Nothing here yet" body="Try a softer search or clear a filter — your little something is probably nearby." onClick={clear} />}</div></section></main></GradientBackground>;
 }
 
 function EmptyState({ title, body, onClick }) { return <GlassCard className="empty-state"><div className="empty-icon"><Sparkles size={25} /></div><h3>{title}</h3><p>{body}</p>{onClick && <Button variant="secondary" onClick={onClick}>Reset the view</Button>}</GlassCard>; }
@@ -553,35 +546,20 @@ function ProductPage({ live: providedLive }) {
   const [selected, setSelected] = useState([]);
   const [quantity, setQuantity] = useState(1);
   useEffect(() => { setSelected(product?.options?.map((option) => option.values?.[0]?.name || '') || []); }, [product?.id]);
-  const price = product ? Number(product.price) + (product.options || []).reduce((sum, option, index) => sum + (option.values.find((value) => value.name === selected[index])?.adjustment || 0), 0) : 0;
-  const handleCta = () => {
-    if (product.type === 'CUSTOM_QUOTE') return navigate(`/custom-request?product=${product.slug}`);
-    const selectedOptions = (product.options || []).map((option, index) => {
-      const value = option.values?.find((item) => item.name === selected[index]);
-      return value ? { label: option.label, value: value.name, adjustment: Number(value.adjustment || 0) } : null;
-    }).filter(Boolean);
-    const cartItem = { ...product, productId: product.id, price, selected: selectedOptions.map((option) => option.value), selectedOptions, quantity };
-    if (!isAuthenticated) return navigate('/signup', { state: { from: { pathname: '/checkout' }, pendingCartItem: cartItem } });
-    addToCart(cartItem);
-    navigate('/checkout');
-  };
+  const selectedOptions = (product?.options || []).map((option, index) => {
+    const value = option.values?.find((item) => item.name === selected[index]);
+    return value ? { label: option.label, value: value.name } : null;
+  }).filter(Boolean);
   if (!product) return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><EmptyState title="Product not found" body="This item may have been removed from the shop." onClick={() => navigate('/shop')} /></main><Footer /></GradientBackground>;
-  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => isAuthenticated ? onWish(product) : navigate('/signup', { state: { from: location } })}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><PriceTag product={product} price={price} /><FormattedDescription className="detail-description" text={product.description} />{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}{value.adjustment > 0 && <small>+{formatINR(value.adjustment)}</small>}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><Button className="full-button" onClick={handleCta} icon={<ArrowRight size={17} />}>{product.type === 'CUSTOM_QUOTE' ? 'Request a quote' : 'Request this item'}</Button>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Request Custom Version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> Manual UPI payment</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button type="button" onClick={() => document.getElementById("product-reviews")?.scrollIntoView({ behavior: "smooth" })}>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after you place an order. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date at checkout and we’ll show you a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><ProductReviewSection product={product} /><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="product"><Navbar cartCount={useApp().cart.length} /><main className="container product-page"><button className="back-link" onClick={() => navigate(-1)}><ChevronLeft size={16} /> Back to shop</button><div className="product-detail"><div className="product-gallery"><div className="gallery-main"><img src={product.image} alt={product.name} /></div></div><div className="product-info"><div className="product-info-top"><Badge tone={product.premium ? 'signature' : 'soft'}>{product.badge}</Badge><button className={`save-button ${wishlist.includes(product.id) ? 'is-wished' : ''}`} onClick={() => isAuthenticated ? onWish(product) : navigate('/signup', { state: { from: location } })}><Heart size={17} fill={wishlist.includes(product.id) ? 'currentColor' : 'none'} /> Save</button></div><p className="eyebrow">{categories.find((item) => item.id === product.category || item.slug === product.category)?.name} · {product.production}</p><h1>{product.name}</h1><FormattedDescription className="detail-description" text={product.description} />{product.type === 'CUSTOM_QUOTE' ? <div className="quote-explainer"><div className="quote-icon"><WandSparkles size={18} /></div><div><strong>This one starts with your story.</strong><p>Share the idea, references and your needed-by date. We’ll reply with a clear quote within 1–2 days.</p></div></div> : <div className="customization-form">{(product.options || []).map((option, optionIndex) => <div className="option-group" key={option.label}><div className="option-title"><strong>{option.label}</strong><span>{selected[optionIndex]}</span></div><div className="option-pills">{option.values.map((value) => <button key={value.name} className={selected[optionIndex] === value.name ? 'is-selected' : ''} onClick={() => setSelected((current) => current.map((item, index) => index === optionIndex ? value.name : item))}>{value.name}</button>)}</div></div>)}<div className="option-group"><div className="option-title"><strong>Quantity</strong><span>Made to order</span></div><div className="quantity-stepper"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={15} /></button><strong>{quantity}</strong><button onClick={() => setQuantity(quantity + 1)}><Plus size={15} /></button></div></div></div>}<div className="delivery-callout"><Truck size={18} /><div><strong>Delivering only in Muradnagar</strong><span>Ready by {String(product.production || 'Ready in 3 days').replace('Ready in ', '').replace('Crafted in ', '')} · campus handover, listed-area delivery or manual location review</span></div></div><a className="button full-button product-whatsapp-cta" href={productInquiryLink(product, selectedOptions, quantity)} target="_blank" rel="noreferrer"><MessageCircle size={17} /> Inquire on WhatsApp</a>{product.allowCustomRequest !== false && <Link className="product-custom-cta" to={`/custom-request?product=${product.slug}`}><WandSparkles size={15} /> Ask about a custom version</Link>}<div className="trust-row"><span><Check size={14} /> Handmade with care</span><span><Check size={14} /> WhatsApp inquiries</span><span><Check size={14} /> Muradnagar delivery</span></div></div></div><div className="product-tabs"><button className="is-active">Details</button><button>Materials & size</button><button type="button" onClick={() => document.getElementById("product-reviews")?.scrollIntoView({ behavior: "smooth" })}>Reviews</button></div><div className="product-detail-lower"><div><h3>A little more about this piece</h3><p>Every piece is made in small batches or crafted after we discuss your request. Colours and tiny details may vary beautifully because your piece is actually made by hand.</p><div className="honesty-notes"><span><ShieldCheck size={15} /> {product.disclaimer || 'Each piece is unique and will vary slightly from the photos.'}</span><span><HeartHandshake size={15} /> {product.careInstructions || 'Keep dry, away from direct sunlight for long hours.'}</span><span><FileText size={15} /> {product.returnable ? 'Ready-made returns follow the store policy.' : 'Custom pieces are non-returnable once production starts.'}</span></div></div><GlassCard><p className="eyebrow">Need it for a date?</p><h3>We’ll help you plan it.</h3><p>Share your needed-by date in WhatsApp and we’ll suggest a realistic ready-by window.</p><Link to={`/custom-request?product=${product.slug}`}>Ask about a custom timeline <ArrowUpRight size={15} /></Link></GlassCard></div><ProductReviewSection product={product} /><section className="related-products"><SectionHeading eyebrow="You may also love" title={<>More little <em>feelings</em></>} /><div className="product-grid">{products.filter((item) => item.id !== product.id).slice(0, 4).map((item) => <ProductCard product={item} key={item.id} onAdd={addToCart} onWish={onWish} isWished={wishlist.includes(item.id)} categories={categories} />)}</div></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CustomRequestPage() {
-  const { token, user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const savedDraft = readSessionStored('efu_custom_request_draft', null);
-  const draftMatchesPath = savedDraft?.search === location.search;
-  const [color, setColor] = useState(draftMatchesPath ? savedDraft.color || 'Blush pink' : 'Blush pink');
+  const { user } = useAuth();
+  const [color, setColor] = useState('Blush pink');
   const [files, setFiles] = useState([]);
-  const [needsFileReselection, setNeedsFileReselection] = useState(Boolean(draftMatchesPath && savedDraft.hadFiles));
-  const [requestId, setRequestId] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState(() => ({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', budget: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLink: '', ...(draftMatchesPath ? savedDraft.form || {} : {}) }));
+  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', title: '', description: '', neededBy: '', size: 'Not sure yet', occasion: 'Just because', pickupLocation: '', extra: '', referenceLink: '' });
   const live = useLive();
   const products = live?.products || [];
   const currentSettings = live?.settings || storeSettings;
@@ -595,7 +573,7 @@ function CustomRequestPage() {
     if (invalid) { setError(`${invalid.name}: choose an image or video up to 8 MB.`); setFiles([]); event.target.value = ''; return; }
     setError(''); setFiles(selected);
   };
-  const submitRequest = async (event) => {
+  const submitRequest = (event) => {
     event.preventDefault(); setError('');
     const phone = form.phone.trim().replace(/[\s()-]/g, '');
     const description = `${form.description.trim()}${form.extra.trim() ? `\n\nAdditional details: ${form.extra.trim()}` : ''}`;
@@ -605,56 +583,45 @@ function CustomRequestPage() {
     if (form.title.trim().length < 3) { setError('Please give your idea a title of at least 3 characters.'); return; }
     if (description.length < 10) { setError('Please describe your idea in at least 10 characters.'); return; }
     if (description.length > 5000) { setError('Your idea details must be 5,000 characters or fewer, including additional details.'); return; }
-    const referenceUrls = [];
+    let referenceLink = '';
     if (form.referenceLink.trim()) {
-      let parsedLink;
-      try { parsedLink = new URL(form.referenceLink.trim()); } catch {}
-      if (!parsedLink || !['http:', 'https:'].includes(parsedLink.protocol)) {
-        setError('Please paste a valid Pinterest or Google Drive link starting with http:// or https://.');
-        return;
-      }
-      referenceUrls.push(parsedLink.href);
+      try {
+        const parsed = new URL(form.referenceLink.trim());
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+        referenceLink = parsed.href;
+      } catch { setError('Please paste a valid Pinterest or Google Drive link starting with http:// or https://.'); return; }
     }
-    if (!token) {
-      writeSessionStored('efu_custom_request_draft', { search: location.search, form, color, hadFiles: files.length > 0 });
-      navigate('/signup', { state: { from: { pathname: location.pathname, search: location.search } } });
-      return;
-    }
-    setLoading(true);
-    try {
-      const referenceFiles = await Promise.all(files.map(async (file) => ({ name: file.name.slice(0, 180), data: await fileToBase64(file) })));
-      const response = await fetch('/api/custom-requests', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          productId: linkedProduct?.id || '', title: form.title.trim(), description,
-          customer: { name: form.name.trim(), phone, email: form.email.trim() }, neededBy: form.neededBy, budget: form.budget.trim(),
-          size: form.size, colours: color, occasion: form.occasion, pickupLocation: form.pickupLocation, referenceUrls, referenceFiles,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const validationMessage = Array.isArray(data.issues)
-          ? data.issues.map((issue) => `${issue.path?.join('.') || 'Request'}: ${issue.message}`).join(' · ')
-          : '';
-        throw new Error(data.message || validationMessage || data.error || `Could not send your idea (${response.status}). Please try again.`);
-      }
-      setRequestId(data.request.id);
-      try { sessionStorage.removeItem('efu_custom_request_draft'); } catch { /* session storage unavailable */ }
-    } catch (err) { setError(err.message || 'Could not send your idea.'); }
-    finally { setLoading(false); }
+    const lines = [
+      'Hi Especially For U! I’d like to inquire about a custom idea.',
+      `Idea: ${form.title.trim()}`,
+      ...(linkedProduct ? [`Related product: ${linkedProduct.name}`, `Product ID: ${linkedProduct.id}`, `Product page: ${window.location.origin}/product/${linkedProduct.slug}`] : []),
+      `Name: ${form.name.trim()}`,
+      `Phone: ${phone}`,
+      `Email: ${form.email.trim()}`,
+      `Details: ${description.slice(0, 750)}${description.length > 750 ? '… (I have more details to share in chat)' : ''}`,
+      `Needed by: ${form.neededBy || 'To be discussed'}`,
+      `Preferred size: ${form.size}`,
+      `Occasion: ${form.occasion}`,
+      `Preferred colour: ${color}`,
+      `Pickup area: ${form.pickupLocation || 'To be discussed'}`,
+      ...(referenceLink ? [`Inspiration link: ${referenceLink.slice(0, 300)}${referenceLink.length > 300 ? '…' : ''}`] : []),
+      ...(files.length ? [`I’ll attach ${files.length} reference file${files.length === 1 ? '' : 's'} in this WhatsApp chat.`] : []),
+    ];
+    const url = whatsappLink(lines.join('\n'));
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = url;
   };
   if (!currentSettings.acceptingCustomRequests) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Clock3 size={32} /></div><p className="eyebrow">A short studio pause</p><h1>Custom requests are <em>resting for now.</em></h1><p>{currentSettings.pauseMessage} You can still browse the shop and save a little something for later.</p><Button as={Link} to="/shop" icon={<ArrowRight size={17} />}>Browse the shop</Button></main><Footer /></GradientBackground>;
-  if (requestId) return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container success-page"><div className="success-orb"><Check size={32} /></div><p className="eyebrow">It’s on its way to us</p><h1>Your idea is <em>safe with us.</em></h1><p>We’ve received your request and will reply in your request chat. Your contact number is saved with it so we can call if needed.</p><GlassCard className="request-id-card"><span>Your request ID</span><strong>{requestId}</strong><Badge tone="icy">REQUESTED</Badge></GlassCard><div className="hero-actions"><Button as={Link} to={`/account/requests/${requestId}`} icon={<MessageCircle size={17} />}>Open request chat</Button><Button as={Link} to="/shop" variant="secondary">Browse the shop</Button></div></main><Footer /></GradientBackground>;
-  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and reference files. We’ll review it, ask questions in your request chat and send you a clear quote.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
+  return <GradientBackground variant="custom"><Navbar cartCount={useApp().cart.length} /><main className="container custom-page"><section className="page-intro custom-intro"><div><p className="eyebrow"><span className="eyebrow-mark">✦</span> The custom corner</p><h1>Have an idea?<br /><em>Let’s make it real.</em></h1><p>Share your idea and reference files. We’ll review it, talk through the details with you directly on WhatsApp.</p>{linkedProduct && <GlassCard className="linked-product-note"><Link to={`/product/${linkedProduct.slug}`}><img src={linkedProduct.image} alt="" /></Link><div><span className="eyebrow">Request linked to</span><strong>{linkedProduct.name}</strong><small>Tell us what you would change, add or make more personal.</small></div></GlassCard>}</div><div className="custom-stamp"><WandSparkles size={21} /><span>dream it<br /><strong>we’ll craft it</strong></span></div></section><div className="custom-layout"><GlassCard className="request-form-card"><div className="form-heading"><span className="form-step">01</span><div><p className="eyebrow">Tell us the good stuff</p><h2>Your idea, in its first draft.</h2></div></div><form onSubmit={submitRequest}>
     <div className="form-grid"><label className="floating-field"><input required minLength={2} maxLength={120} value={form.name} onChange={setField('name')} placeholder=" " /><span>Your name</span></label><label className="floating-field"><input required type="tel" maxLength={16} inputMode="tel" value={form.phone} onChange={setField('phone')} placeholder=" " /><span>Phone number (we may call)</span></label><label className="floating-field"><input required type="email" maxLength={180} value={form.email} onChange={setField('email')} placeholder=" " /><span>Email address</span></label><label className="floating-field"><input required minLength={3} maxLength={160} value={form.title} onChange={setField('title')} placeholder=" " /><span>Idea title</span></label></div>
     <label className="floating-field floating-textarea"><textarea required minLength={10} maxLength={5000} value={form.description} onChange={setField('description')} placeholder=" " rows="4" /><span>Tell us about it — the story, the vibe, the tiny details...</span></label>
-    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : needsFileReselection ? 'Please choose these files again after creating your account.' : 'Only the studio team will use these to review your request.'}</small></label></div>
+    <div className="form-section"><div className="field-title"><strong>Reference images or videos</strong><span>up to 5 files</span></div><label className="file-drop" style={{ cursor: 'pointer' }}><input type="file" accept="image/*,video/*" multiple onChange={chooseFiles} style={{ display: 'none' }} /><UploadCloud size={22} /><strong>Choose your inspiration files</strong><span>Images or short videos · max 8 MB each</span><small>{files.length ? files.map((file) => file.name).join(' · ') : 'Attach these files in WhatsApp after the message opens.'}</small></label></div>
     <div className="form-section reference-link-section"><div className="field-title"><strong>Or share an inspiration link</strong><span>Optional</span></div><label className="floating-field"><input type="url" maxLength={2048} value={form.referenceLink} onChange={setField('referenceLink')} placeholder=" " /><span>Paste a Pinterest or Google Drive link</span></label><small>For Google Drive, set access to “Anyone with the link” before pasting it here.</small></div>
     <div className="form-grid"><label className="select-field"><span>Preferred size</span><select value={form.size} onChange={setField('size')}><option>Not sure yet</option><option>Small / desk size</option><option>Medium / shelf size</option><option>Large / statement piece</option></select><ChevronDown size={15} /></label><label className="select-field"><span>Occasion</span><select value={form.occasion} onChange={setField('occasion')}><option>Just because</option><option>Birthday</option><option>Anniversary</option><option>Graduation</option><option>Festive</option></select><ChevronDown size={15} /></label></div>
     <div className="form-section"><div className="field-title"><strong>Preferred colour</strong><span>{color}</span></div><div className="color-swatches">{['Blush pink', 'Lavender', 'Icy blue', 'Surprise me'].map((item, index) => <button type="button" className={color === item ? 'is-selected' : ''} onClick={() => setColor(item)} key={item}><span className={`swatch swatch-${index}`} />{item}</button>)}</div></div>
-    <div className="form-grid"><label className="floating-field"><input required value={form.neededBy} onChange={setField('neededBy')} placeholder=" " type="date" /><span>Needed by</span></label><label className="floating-field"><input value={form.budget} onChange={setField('budget')} placeholder=" " /><span>Budget range (₹)</span></label></div><label className="floating-field"><input value={form.pickupLocation} onChange={setField('pickupLocation')} placeholder=" " /><span>Pickup location / area (Muradnagar)</span></label><label className="floating-field"><input value={form.extra} onChange={setField('extra')} placeholder=" " /><span>Anything else?</span></label>
-    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" disabled={loading} className="full-button" icon={<Send size={16} />}>{loading ? 'Sending your idea…' : token ? 'Send my idea' : 'Sign up to send your idea'}</Button><p className="form-footnote">No payment until you approve a quote. We save your phone number with the request so we can contact you about it.</p>
-    </form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={customPageImage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Request received', 'We review your idea', 'A clear quote arrives in chat', 'You say yes', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+    <div className="form-grid"><label className="floating-field"><input required value={form.neededBy} onChange={setField('neededBy')} placeholder=" " type="date" /><span>Needed by</span></label></div><label className="floating-field"><input value={form.pickupLocation} onChange={setField('pickupLocation')} placeholder=" " /><span>Pickup location / area (Muradnagar)</span></label><label className="floating-field"><input value={form.extra} onChange={setField('extra')} placeholder=" " /><span>Anything else?</span></label>
+    {error && <div role="alert" style={{ padding: '10px 14px', borderRadius: 12, background: 'rgba(197,90,131,.1)', border: '1px solid rgba(197,90,131,.25)', color: '#c55a83', fontSize: 13 }}>{error}</div>}<Button type="submit" className="full-button" icon={<MessageCircle size={16} />}>Inquire on WhatsApp</Button><p className="form-footnote">WhatsApp opens with your details ready. Check the message and tap Send; attach any reference photos or videos in that chat.</p>
+    </form></GlassCard><aside className="custom-aside"><div className="aside-image"><img src={customPageImage} alt="Layered handmade craft references" /></div><GlassCard className="next-steps"><p className="eyebrow">What happens next</p><h3>A little magic, in five steps.</h3>{['Your message arrives', 'We review your idea', 'We reply on WhatsApp', 'We confirm the details', 'We start crafting'].map((item, index) => <div className="next-step" key={item}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong>{index < 4 && <div className="next-line" />}</div>)}</GlassCard></aside></div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function CartPage() {
@@ -855,16 +822,16 @@ function CustomerOrders({ token }) {
   return <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your orders</p><h2>Order updates</h2></div></div>
     {error && <div role="alert">{error}</div>}
     {loading ? <p>Loading your orders…</p> : orders.length ? <div className="account-order-list">{orders.map((order) => <GlassCard className="account-order-card" key={order.id}>
-      <div className="order-card-top"><div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{String(order.status || 'PENDING').replaceAll('_', ' ')}</Badge><strong style={{ display: 'block', marginTop: 6 }}>{order.productNames || 'Your order'}</strong><span className="order-number">Order ID: {order.id}</span></div><strong>{formatINR(Number(order.total || 0))}</strong></div>
+      <div className="order-card-top"><div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{String(order.status || 'PENDING').replaceAll('_', ' ')}</Badge><strong style={{ display: 'block', marginTop: 6 }}>{order.productNames || 'Your order'}</strong><span className="order-number">Order ID: {order.id}</span></div></div>
       <div className="account-order-details"><span><MapPin size={14} /> {order.deliveryArea || 'Delivery details in order'}</span><span>Placed {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'recently'}</span><span>Ready by {order.estimatedDate ? new Date(order.estimatedDate).toLocaleDateString() : 'To be confirmed'}</span></div>
-      <div className="account-order-payment"><strong>{order.paymentStatus || 'PENDING'}</strong><span>Paid {formatINR(Number(order.paidAmount || 0))} · Due {formatINR(Number(order.balanceDue ?? Math.max(0, Number(order.total || 0) - Number(order.paidAmount || 0))))}</span></div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        {orderChatIsClosed(order) ? <span className="account-chat-closed">Chat closed · order complete</span> : <Link className="account-order-chat-link" to={`/account/orders/${encodeURIComponent(order.id)}/chat`}><MessageCircle size={15} /> Message the studio <ArrowRight size={14} /></Link>}
+        <Link className="account-order-chat-link" to={`/account/orders/${encodeURIComponent(order.id)}/chat`}><MessageCircle size={15} /> Inquire on WhatsApp <ArrowRight size={14} /></Link>
         {(order.cancellationAllowed ?? order.cancellation_allowed ?? true) !== false && Number(order.cancellationAllowed ?? order.cancellation_allowed ?? 1) !== 0
           ? <button type="button" className="button button-ghost" disabled={cancellingId === order.id} onClick={() => cancelOrder(order)}>{cancellingId === order.id ? 'Cancelling…' : 'Cancel order'}</button>
           : <span style={{ fontSize: 12, color: 'var(--muted)' }}>Cancellation closed by the studio</span>}
       </div>
-    </GlassCard>)}</div> : <EmptyState title="No orders yet" body="Orders you place will appear here with their payment and delivery status." />}
+    </GlassCard>)}</div> : <EmptyState title="No orders yet" body="Past order updates will appear here." />}
   </div>;
 }
 
@@ -877,88 +844,13 @@ function CustomerMessages({ token }) {
       .then((data) => setOrders(data?.orders || []))
       .catch(() => setOrders([])).finally(() => setLoading(false));
   }, [token]);
-  return <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Private order chats</p><h2>Messages with the studio</h2></div></div>{loading ? <p>Loading your chats…</p> : orders.length ? <div className="account-order-list">{orders.map((order) => <GlassCard className="account-message-row" key={order.id}><div><MessageCircle size={18} /><div><strong>{order.productNames || 'Your order'}</strong><span>Order {order.id} · {String(order.status || 'PENDING').replaceAll('_', ' ')} · {order.paymentStatus || 'PAYMENT PENDING'}</span></div></div>{orderChatIsClosed(order) ? <span className="account-chat-closed">Chat closed</span> : <Link to={`/account/orders/${encodeURIComponent(order.id)}/chat`}>Open chat <ArrowRight size={14} /></Link>}</GlassCard>)}</div> : <EmptyState title="No chats yet" body="After you place an order, you can message the studio about colours, additions, or delivery." />}</div>;
+  return <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">WhatsApp follow-ups</p><h2>Contact the studio</h2></div></div>{loading ? <p>Loading your chats…</p> : orders.length ? <div className="account-order-list">{orders.map((order) => <GlassCard className="account-message-row" key={order.id}><div><MessageCircle size={18} /><div><strong>{order.productNames || 'Your order'}</strong><span>Order {order.id} · {String(order.status || 'PENDING').replaceAll('_', ' ')}</span></div></div><Link to={`/account/orders/${encodeURIComponent(order.id)}/chat`}>Inquire on WhatsApp <ArrowRight size={14} /></Link></GlassCard>)}</div> : <EmptyState title="No chats yet" body="Open WhatsApp to ask the studio about a past order or delivery." />}</div>;
 }
 
 function OrderChatPage() {
   const { id } = useParams();
-  const { token } = useAuth();
-  const [order, setOrder] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const load = async () => {
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [orderResponse, chatResponse] = await Promise.all([fetch(`/api/orders/${encodeURIComponent(id)}`, { headers }), fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { headers })]);
-      const orderData = await orderResponse.json().catch(() => ({}));
-      const chatData = await chatResponse.json().catch(() => ({}));
-      if (!orderResponse.ok) throw new Error(orderData.message || 'Could not load this order.');
-      if (!chatResponse.ok) throw new Error(chatData.message || chatData.error || 'Could not load this chat.');
-      setOrder(orderData.order); setMessages(chatData.messages || []); setError('');
-    } catch (loadError) { setError(loadError.message || 'Could not load this order chat.'); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => {
-    load();
-    const timer = setInterval(async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const [orderResponse, chatResponse] = await Promise.all([
-          fetch(`/api/orders/${encodeURIComponent(id)}`, { headers }),
-          fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { headers }),
-        ]);
-        const [orderData, chatData] = await Promise.all([
-          orderResponse.json().catch(() => ({})),
-          chatResponse.json().catch(() => ({})),
-        ]);
-        if (orderResponse.ok) setOrder(orderData.order);
-        if (chatResponse.ok) setMessages(chatData.messages || []);
-      } catch { /* keep the last messages visible */ }
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [id, token]);
-  const send = async (event) => {
-    event.preventDefault(); const message = text.trim(); if (!message || chatClosed) return;
-    try {
-      const response = await fetch(`/api/conversations/order/${encodeURIComponent(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ message }) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || data.error || 'Message could not be sent.');
-      setText(''); setMessages((current) => [...current, data.message]); setError('');
-    } catch (sendError) { setError(sendError.message || 'Message could not be sent.'); }
-  };
-  const total = Number(order?.total ?? order?.pricing?.total ?? 0);
-  const paid = Number(order?.paidAmount ?? order?.paid_amount ?? 0);
-  const status = order?.paymentStatus || order?.payment_status || 'PENDING';
-  const chatClosed = orderChatIsClosed(order);
-  const productNames = order?.items?.map((item) => item.productName).filter(Boolean).join(', ') || 'Your handmade order';
-  return <GradientBackground variant="account">
-    <Navbar cartCount={useApp().cart.length} />
-    <main className="container order-chat-page">
-      <Link className="back-link" to="/account"><ChevronLeft size={15} /> Back to your account</Link>
-      {loading ? <GlassCard className="order-chat-panel"><p>Opening your order chat…</p></GlassCard> : error ? <GlassCard className="order-chat-panel"><p className="review-error">{error}</p><Link to="/account">Return to your account</Link></GlassCard> : order && <GlassCard className="order-chat-panel">
-        <header className="order-chat-header">
-          <div>
-            <p className="eyebrow">Private order chat</p>
-            <h1><em>{productNames}</em></h1>
-            <p>Order ID: {id}</p>
-          </div>
-          <div className="order-chat-status">
-            <Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{String(order.status || 'PENDING').replaceAll('_', ' ')}</Badge>
-            <span>{status.replaceAll('_', ' ')}</span>
-            <small>Paid {formatINR(paid)} · Due {formatINR(Math.max(0, total - paid))}</small>
-          </div>
-        </header>
-        <div className={`order-chat-note ${chatClosed ? 'is-closed' : ''}`}><strong>{chatClosed ? 'Order conversation complete' : 'Need a colour change or a small addition?'}</strong><span>{chatClosed ? 'This order is fully paid and delivered. The conversation is now read-only.' : 'Send it here and the studio will reply in this order chat.'}</span></div>
-        <div className="order-chat-messages">{messages.length ? messages.map((message) => <article key={message.id} className={`order-chat-message ${message.senderRole === 'CUSTOMER' ? 'from-customer' : 'from-studio'}`}><small>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {message.createdAt ? new Date(message.createdAt).toLocaleString() : ''}</small><p>{message.message}</p></article>) : <p className="order-chat-empty">{chatClosed ? 'This conversation is closed.' : 'Your chat is ready. Send the studio your preferences or questions about this order.'}</p>}</div>
-        {chatClosed ? <div className="order-chat-closed-note">Messaging is closed for this completed order. You can still read this conversation.</div> : <form className="order-chat-form" onSubmit={send}><textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={3000} rows={2} placeholder="Message the studio about this order…" required /><Button type="submit" disabled={!text.trim()} icon={<Send size={15} />}>Send</Button></form>}
-        {error && <p className="review-error" role="alert">{error}</p>}
-      </GlassCard>}
-    </main>
-    <Footer />
-    <WhatsAppFloat />
-  </GradientBackground>;
+  const message = `Hi Especially For U! I’m following up about order ${id}. Could you please help me with an update?`;
+  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container order-chat-page"><Link className="back-link" to="/account"><ChevronLeft size={15} /> Back to your account</Link><GlassCard className="order-chat-panel"><p className="eyebrow">WhatsApp with the studio</p><h1>Continue your conversation.</h1><p>We now handle product questions and order follow-ups directly on WhatsApp. Your order reference is included in the message.</p><a className="button product-whatsapp-cta" href={whatsappLink(message)} target="_blank" rel="noreferrer"><MessageCircle size={16} /> Inquire on WhatsApp</a></GlassCard></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function AccountPage() {
@@ -974,71 +866,13 @@ function AccountPage() {
       .then((response) => response.ok ? response.json() : null).then((data) => setRequestList(data?.requests || [])).catch(() => {});
   }, [token]);
   const displayName = user?.name || 'Lovely human';
-  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && wishlist.length > 0 && <span>{wishlist.length}</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <CustomerOrders token={token} />}{tab === 'Messages' && <CustomerMessages token={token} />}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{requestList.length ? requestList.map((request) => <GlassCard className="request-row" key={request.id}><div><Badge tone={request.status === 'QUOTE_SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy || 'Not set'} · Phone {request.phone || user?.phone || '—'}</p>{request.quote?.amount && <strong>Quote: {formatINR(Number(request.quote.amount))}</strong>}<Link to={`/account/requests/${request.id}`} style={{ display: 'inline-flex', gap: 6, marginTop: 8 }}>Open request chat <ArrowRight size={14} /></Link></div></GlassCard>) : <EmptyState title="No custom requests yet" body="Send an idea and we’ll keep the conversation here." />}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div>{products.some((product) => wishlist.includes(product.id)) ? <div className="product-grid">{products.filter((product) => wishlist.includes(product.id)).map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished />)}</div> : <EmptyState title="Your wishlist is empty" body="Save products you like and they’ll appear here." />}</div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={user?.name || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? '' : (user?.email || '')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
+  return <GradientBackground variant="account"><Navbar cartCount={useApp().cart.length} /><main className="container account-page"><section className="account-hero"><div className="account-avatar">{displayName[0]}</div><div><p className="eyebrow">Your little corner</p><h1>Hello, <em>{displayName}.</em></h1><p>Keep an eye on your orders, requests and saved little somethings.</p></div><Button as={Link} to="/shop" variant="secondary" icon={<ArrowRight size={16} />}>Keep browsing</Button></section><div className="account-tabs">{tabs.map((item) => <button className={tab === item ? 'is-active' : ''} onClick={() => setTab(item)} key={item}>{item}{item === 'Wishlist' && wishlist.length > 0 && <span>{wishlist.length}</span>}</button>)}</div><div className="account-content">{tab === 'Orders' && <CustomerOrders token={token} />}{tab === 'Messages' && <CustomerMessages token={token} />}{tab === 'Custom Requests' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Your ideas, in progress</p><h2>Custom requests</h2></div><Button as={Link} to="/custom-request" variant="secondary" icon={<Plus size={16} />}>New request</Button></div>{requestList.length ? requestList.map((request) => <GlassCard className="request-row" key={request.id}><div><Badge tone={request.status === 'QUOTE_SENT' ? 'blush' : 'icy'}>{request.status}</Badge><h3>{request.title}</h3><p>{request.id} · Needed by {request.neededBy || 'Not set'} · Phone {request.phone || user?.phone || '—'}</p><Link to={`/account/requests/${request.id}`} style={{ display: 'inline-flex', gap: 6, marginTop: 8 }}>Open request chat <ArrowRight size={14} /></Link></div></GlassCard>) : <EmptyState title="No custom requests yet" body="Send an idea and we’ll keep the conversation here." />}</div>}{tab === 'Wishlist' && <div className="account-orders"><div className="content-heading"><div><p className="eyebrow">Saved for later</p><h2>Your wishlist</h2></div></div>{products.some((product) => wishlist.includes(product.id)) ? <div className="product-grid">{products.filter((product) => wishlist.includes(product.id)).map((product) => <ProductCard product={product} key={product.id} onAdd={addToCart} onWish={onWish} isWished />)}</div> : <EmptyState title="Your wishlist is empty" body="Save products you like and they’ll appear here." />}</div>}{(tab === 'Addresses' || tab === 'Profile') && <GlassCard className="settings-card"><p className="eyebrow">{tab === 'Addresses' ? 'Delivery details' : 'Your details'}</p><h2>{tab === 'Addresses' ? 'Where should the magic arrive?' : 'A little about you.'}</h2><div className="form-grid"><label className="floating-field"><input defaultValue={user?.name || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Recipient name' : 'Full name'}</span></label><label className="floating-field"><input defaultValue={user?.phone || ''} placeholder=" " /><span>{tab === 'Addresses' ? 'Phone' : 'Phone number'}</span></label></div><label className="floating-field"><input defaultValue={tab === 'Addresses' ? '' : (user?.email || '')} placeholder=" " /><span>{tab === 'Addresses' ? 'Address / landmark' : 'Email address'}</span></label><Button>Save changes</Button></GlassCard>}</div></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function RequestConversationPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { token } = useAuth();
-  const [request, setRequest] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [acceptedOrder, setAcceptedOrder] = useState(null);
-  const load = async () => {
-    setLoading(true); setError('');
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [requestResponse, messagesResponse] = await Promise.all([
-        fetch(`/api/custom-requests/${id}`, { headers }), fetch(`/api/conversations/request/${id}`, { headers }),
-      ]);
-      const requestData = await requestResponse.json().catch(() => ({}));
-      const messageData = await messagesResponse.json().catch(() => ({}));
-      if (!requestResponse.ok) throw new Error(requestData.message || 'Could not load this request.');
-      if (!messagesResponse.ok) throw new Error(messageData.message || 'Could not load this conversation.');
-      setRequest(requestData.request); setMessages(messageData.messages || []);
-    } catch (err) { setError(err.message || 'Could not load request.'); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, [id, token]);
-  const send = async (event) => {
-    event.preventDefault();
-    const message = text.trim();
-    if (!message) return;
-    try {
-      const response = await fetch(`/api/conversations/request/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ message }) });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || 'Message could not be sent.');
-      setText(''); setMessages((items) => [...items, data.message]); setError('');
-    } catch (err) { setError(err.message || 'Message could not be sent.'); }
-  };
-  const acceptQuote = async () => {
-    try {
-      const response = await fetch(`/api/custom-requests/${id}/accept-quote`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || 'Could not accept quote.');
-      setAcceptedOrder(data.order); setError('');
-      navigate(`/account/orders/${encodeURIComponent(data.order.id)}/chat`);
-    } catch (err) { setError(err.message || 'Could not accept quote.'); }
-  };
-  const quoteTotal = Number(request?.quote?.amount || request?.quote?.total || 0);
-  const quoteAdvance = Math.ceil(quoteTotal / 2);
-  return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} /><main className="container track-page"><section className="track-card" style={{ maxWidth: 760, textAlign: 'left' }}><p className="eyebrow">Your custom idea</p><h1 style={{ fontSize: 48 }}>{request?.title || 'Request chat'}</h1><p>{id} · {request?.status || 'Loading'}</p>
-    {request?.referenceUrls?.length > 0 && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '18px 0' }}>{request.referenceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: '#995f83', fontSize: 13 }}>Open reference {index + 1} ↗</a>)}</div>}
-    {request?.quote && <GlassCard className="customer-quote-card">
-      <p className="eyebrow">Your studio quote</p>
-      <div className="customer-quote-total">{formatINR(quoteTotal)}</div>
-      <p className="customer-quote-note">{request.quote.note || request.quote.message || 'A thoughtful, handmade piece made just for your idea.'}</p>
-      <div className="customer-quote-advance"><span>50% advance to begin</span><strong>{formatINR(quoteAdvance)}</strong></div>
-      {request.status === 'QUOTE_SENT' && <Button onClick={acceptQuote} className="quote-accept-button" icon={<ArrowRight size={17} />}><span className="quote-accept-copy"><span>Accept quote</span><strong>Pay {formatINR(quoteAdvance)} advance</strong></span></Button>}
-      {acceptedOrder && <p className="quote-accepted-note">Order {acceptedOrder.id} created. <Link to={`/account/orders/${encodeURIComponent(acceptedOrder.id)}/chat`}>Open order chat</Link></p>}
-    </GlassCard>}
-    {loading ? <p>Loading your conversation…</p> : <div style={{ display: 'grid', gap: 10, padding: 14, maxHeight: 420, overflowY: 'auto', borderRadius: 16, background: 'rgba(255,255,255,.62)' }}>{messages.length ? messages.map((message) => <div key={message.id} style={{ justifySelf: message.senderRole === 'CUSTOMER' ? 'end' : 'start', maxWidth: '88%', padding: '12px 14px', borderRadius: 14, background: message.senderRole === 'CUSTOMER' ? 'rgba(255,175,204,.22)' : 'rgba(62,142,126,.1)' }}><small>{message.senderRole === 'CUSTOMER' ? 'You' : 'Studio'} · {new Date(message.createdAt).toLocaleString()}</small><p style={{ margin: '5px 0 0', whiteSpace: 'pre-wrap' }}>{message.message}</p></div>) : <p style={{ margin: 0, color: 'var(--muted)' }}>Your idea is in the studio inbox. Send a message here any time.</p>}</div>}
-    {error && <div role="alert" style={{ marginTop: 12, color: '#c55a83' }}>{error}</div>}
-    <form onSubmit={send} style={{ display: 'grid', gap: 10, marginTop: 16 }}><label className="floating-field floating-textarea"><textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder=" " /><span>Write a message to the studio…</span></label><Button type="submit" className="full-button" icon={<Send size={15} />}>Send message</Button></form>
-  </section></main><Footer /></GradientBackground>;
+  const message = `Hi Especially For U! I’m following up about custom inquiry ${id}. Could you please help me with an update?`;
+  return <GradientBackground variant="track"><Navbar cartCount={useApp().cart.length} /><main className="container track-page"><section className="track-card"><p className="eyebrow">Your custom idea</p><h1>Continue on <em>WhatsApp.</em></h1><p>Your inquiry reference is included so the studio can find the details.</p><GlassCard className="request-id-card"><span>Inquiry reference</span><strong>{id}</strong></GlassCard><a className="button product-whatsapp-cta" href={whatsappLink(message)} target="_blank" rel="noreferrer"><MessageCircle size={16} /> Inquire on WhatsApp</a></section></main><Footer /><WhatsAppFloat /></GradientBackground>;
 }
 
 function TrackOrderPage() {
@@ -1335,7 +1169,7 @@ function AdminProductsPanel() {
       payload.image = imageUrl;
       if (editing) {
         await req('PATCH', `/api/admin/products/${editing.id}`, payload);
-        setFormMsg({ type: 'success', text: `Updated “${payload.name}” with price ${formatINR(payload.price)}.` });
+        setFormMsg({ type: 'success', text: `Updated “${payload.name}”.` });
       } else {
         await req('POST', '/api/admin/products', payload);
         setFormMsg({ type: 'success', text: `Created “${payload.name}”.` });
@@ -1453,7 +1287,7 @@ function AdminProductsPanel() {
                 <span>Type</span>
                 <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                   <option value="READYMADE">Ready-made</option>
-                  <option value="CUSTOM_FIXED">Custom (fixed price)</option>
+                  <option value="CUSTOM_FIXED">Customisable</option>
                   <option value="CUSTOM_QUOTE">Custom (quote)</option>
                 </select>
                 <ChevronDown size={15} />
@@ -1468,15 +1302,7 @@ function AdminProductsPanel() {
                 <ChevronDown size={15} />
               </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
-              <label className="floating-field">
-                <input required type="number" min="0" placeholder=" " value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
-                <span>Sale price (₹)</span>
-              </label>
-              <label className="floating-field">
-                <input type="number" min="0" placeholder=" " value={form.originalPrice} onChange={(e) => setForm({ ...form, originalPrice: e.target.value })} />
-                <span>Original price (₹)</span>
-              </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <label className="floating-field">
                 <input placeholder=" " value={form.badge} onChange={(e) => setForm({ ...form, badge: e.target.value })} />
                 <span>Badge (New / Bestseller)</span>
@@ -1486,11 +1312,7 @@ function AdminProductsPanel() {
                 <span>Production text</span>
               </label>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 14, borderRadius: 14, background: 'rgba(255,175,204,.12)', border: '1px solid rgba(197,90,131,.12)' }}>
-              <label className="floating-field"><input type="datetime-local" value={form.saleStartsAt} onChange={(e) => setForm({ ...form, saleStartsAt: e.target.value })} /><span>Discount starts</span></label>
-              <label className="floating-field"><input type="datetime-local" value={form.saleEndsAt} onChange={(e) => setForm({ ...form, saleEndsAt: e.target.value })} /><span>Discount ends</span></label>
-              <small style={{ gridColumn: '1 / -1', color: 'var(--muted)', fontSize: 11 }}>Set the original price and a lower sale price above. Leave dates blank for a discount with no schedule.</small>
-            </div>
+            <p className="form-footnote">Customers can ask about this product directly on WhatsApp.</p>
             <div className="product-description-editor">
               <div className="description-editor-toolbar"><span>Use Enter for a new paragraph. Select text and make it bold.</span><div><button type="button" onClick={() => insertDescriptionFormatting('bold')} aria-label="Make selected text bold"><strong>B</strong> Bold</button><button type="button" onClick={() => insertDescriptionFormatting('newline')}>↵ New line</button></div></div>
               <label className="floating-field floating-textarea">
@@ -1585,7 +1407,6 @@ function AdminProductsPanel() {
                         <div className="admin-product-name"><strong>{p.name}</strong><Badge tone={p.premium ? 'signature' : 'icy'}>{p.badge || 'New'}</Badge></div>
                         <small className="admin-product-meta">{[p.slug || p.id, ...(Array.isArray(p.occasions) ? p.occasions.slice(0, 2) : [])].filter(Boolean).join(' · ')}</small>
                       </div>
-                      <div className="admin-product-price"><strong>{formatINR(Number(p.price || 0))}</strong>{p.originalPrice && <small>was {formatINR(Number(p.originalPrice))}</small>}</div>
                       <div className="admin-product-status">
                         <button type="button" className={`toggle ${p.isActive !== false ? 'is-on' : ''}`} onClick={() => toggleActive(p)} aria-label={`${p.isActive !== false ? 'Hide' : 'Activate'} ${p.name}`}><span /></button>
                         <small>{p.isActive !== false ? 'Active' : 'Hidden'}</small>
@@ -1897,11 +1718,6 @@ function AdminOrdersPanel() {
               const cust = order.customer || {};
               const deliv = order.delivery || {};
               const currentEst = editingEst[order.id] !== undefined ? editingEst[order.id] : (order.estimatedDate || order.estimated_date || '');
-              const totalAmount = Number(order.total || order.pricing?.total || 0);
-              const paidAmount = Number(order.paidAmount ?? order.paid_amount ?? 0);
-              const advanceTarget = Number(order.advanceDue ?? order.advance_due ?? order.pricing?.advanceDue ?? Math.ceil(totalAmount / 2));
-              const halfRemaining = Math.max(0, Math.min(totalAmount, advanceTarget) - paidAmount);
-              const fullRemaining = Math.max(0, totalAmount - paidAmount);
               return <div key={order.id} style={{ padding: '14px 16px', borderRadius: 14, border: '1px solid rgba(90,63,86,.1)', background: '#fff' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 2fr) minmax(120px, 1fr) 220px 180px', gap: 14, alignItems: 'center' }}>
                   <div>
@@ -1926,23 +1742,13 @@ function AdminOrdersPanel() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-                  <Badge tone={order.paymentStatus === 'PAID' ? 'icy' : 'blush'}>{order.paymentStatus || 'PENDING'}</Badge>
                   <span style={{ fontSize: 12, color: 'var(--muted)' }}>Customer cancellation: {(order.cancellationAllowed ?? order.cancellation_allowed ?? true) !== false && Number(order.cancellationAllowed ?? order.cancellation_allowed ?? 1) !== 0 ? 'Open' : 'Closed'}</span>
                   <button className="button button-mini" onClick={() => updateCancellationPermission(order)}>{(order.cancellationAllowed ?? order.cancellation_allowed ?? true) !== false && Number(order.cancellationAllowed ?? order.cancellation_allowed ?? 1) !== 0 ? 'Close cancellation' : 'Reopen cancellation'}</button>
-                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>Paid {formatINR(Number(order.paidAmount || 0))} · Balance {formatINR(Math.max(0, Number(order.total || 0) - Number(order.paidAmount || 0)))} · Total {formatINR(Number(order.total || 0))}{Number(order.reportedAmount || order.reported_amount) > 0 ? ` · Customer reports ${formatINR(Number(order.reportedAmount || order.reported_amount))}${order.reportedReference || order.reported_reference ? ` · Ref ${order.reportedReference || order.reported_reference}` : ''}` : ''}</span>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    <button className="button button-mini" disabled={!halfRemaining} onClick={() => recordPaymentToTarget(order, advanceTarget, '50% payment')}>
-                      {halfRemaining ? `Verify half paid · +${formatINR(halfRemaining)}` : 'Half paid verified'}
-                    </button>
-                    <button className="button button-mini" disabled={!fullRemaining} onClick={() => recordPaymentToTarget(order, totalAmount, 'Full payment')}>
-                      {fullRemaining ? `Verify full paid · +${formatINR(fullRemaining)}` : 'Fully paid'}
-                    </button>
-                  </div>
                 </div>
               </div>;
             })}
           </div>
-        ) : <EmptyState title="No orders yet" body="Orders placed through checkout will appear here." />
+        ) : <EmptyState title="No orders yet" body="Past order records will appear here." />
       }
     </GlassCard>
   </div>;
@@ -1956,7 +1762,6 @@ function AdminConversationsPanel() {
   const [requestDetail, setRequestDetail] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
   const [draft, setDraft] = useState('');
-  const [quoteAmount, setQuoteAmount] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const req = async (method, url, body) => {
@@ -1980,7 +1785,6 @@ function AdminConversationsPanel() {
       if (kind === 'request') {
         const requestData = await req('GET', `/api/admin/custom-requests/${thread.entityId}`);
         setRequestDetail(requestData.request);
-        setQuoteAmount(requestData.request?.quote?.amount ? String(requestData.request.quote.amount) : '');
         setOrderDetail(null);
       } else {
         const orderData = await req('GET', `/api/admin/orders/${thread.entityId}`);
@@ -2001,16 +1805,6 @@ function AdminConversationsPanel() {
     try {
       const data = await req('POST', `/api/admin/conversations/${selected.conversationType.toLowerCase()}/${selected.entityId}`, { message: draft.trim() });
       setMessages((items) => [...items, data.message]); setDraft(''); setError(''); refreshList();
-    } catch (err) { setError(err.message); }
-  };
-  const sendQuote = async () => {
-    const amount = Number(quoteAmount);
-    if (!selected || !Number.isSafeInteger(amount) || amount < 1) return setError('Enter a valid quote amount.');
-    try {
-      const message = `Your quote is ${formatINR(amount)}. A 50% advance (${formatINR(Math.ceil(amount / 2))}) is due before we begin. Reply here if you have any questions.`;
-      await req('PATCH', `/api/admin/custom-requests/${selected.entityId}/status`, { status: 'QUOTE_SENT', quote: { amount, advance: Math.ceil(amount / 2), note: '' } });
-      const result = await req('POST', `/api/admin/conversations/request/${selected.entityId}`, { message });
-      setMessages((items) => [...items, result.message]); setError(''); refreshThread(selected); refreshList();
     } catch (err) { setError(err.message); }
   };
   const clearThread = async () => {
@@ -2036,12 +1830,6 @@ function AdminConversationsPanel() {
       <GlassCard style={{ padding: 18, display: 'flex', flexDirection: 'column', minWidth: 0 }}>{selected ? <>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: 12, borderBottom: '1px solid var(--line)' }}><div><p className="eyebrow" style={{ marginBottom: 4 }}>{selected.conversationType} · {selected.entityId}</p><h2 style={{ margin: 0 }}>{selected.customerName || 'Customer'}</h2>{selected.customerPhone && <a href={`tel:${selected.customerPhone}`}><PhoneCall size={13} /> Call {selected.customerPhone}</a>}<small style={{ display: 'block', color: 'var(--muted)', marginTop: 4 }}>Status: {requestDetail?.status || orderDetail?.status || '—'}</small></div><div style={{ display: 'grid', justifyItems: 'end', gap: 8 }}><button className="small-link" onClick={() => refreshThread(selected)}><RefreshCw size={13} /> Refresh</button>{(selected.conversationType === 'ORDER' ? orderDetail?.status !== 'DELIVERED' : requestDetail?.status !== 'COMPLETED') && <button className="small-link" onClick={markComplete}><Check size={13} /> Mark complete</button>}</div></div>
         {requestDetail?.referenceUrls?.length > 0 && <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', padding: '12px 0' }}>{requestDetail.referenceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" style={{ color: '#995f83', fontSize: 12 }}>View customer reference {index + 1} ↗</a>)}</div>}
-        {requestDetail && <div className="quote-composer">
-          <p className="eyebrow">Prepare custom quote</p>
-          <label className="quote-amount-control"><span>Total quote amount</span><div><b>₹</b><input type="number" min="1" step="1" value={quoteAmount} onChange={(event) => setQuoteAmount(event.target.value)} placeholder="0" aria-label="Total quote amount in rupees" /></div></label>
-          <div className="quote-advance-preview"><span>50% advance to begin</span><strong>{formatINR(Math.ceil((Number(quoteAmount) || 0) / 2))}</strong></div>
-          <Button className="quote-send-button" onClick={sendQuote} disabled={!Number.isSafeInteger(Number(quoteAmount)) || Number(quoteAmount) < 1} icon={<Send size={16} />}><span className="quote-send-button-copy"><span>Send quote to customer</span><strong>{formatINR(Number(quoteAmount) || 0)}</strong></span></Button>
-        </div>}
         <div style={{ flex: 1, minHeight: 180, maxHeight: 350, overflowY: 'auto', display: 'grid', alignContent: 'start', gap: 9, padding: 8, background: 'rgba(90,63,86,.035)', borderRadius: 14 }}>{messages.map((message) => <div key={message.id} style={{ justifySelf: message.senderRole === 'ADMIN' ? 'end' : 'start', maxWidth: '88%', padding: '10px 13px', borderRadius: 13, background: message.senderRole === 'ADMIN' ? 'rgba(62,142,126,.12)' : '#fff' }}><small style={{ color: 'var(--muted)' }}>{message.senderRole === 'ADMIN' ? 'Studio' : 'Customer'} · {new Date(message.createdAt).toLocaleString()}</small><p style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{message.message}</p></div>)}</div>
         <form onSubmit={send} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12 }}><textarea rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Reply to the customer…" style={{ resize: 'vertical', padding: 10, border: '1px solid var(--line)', borderRadius: 10, font: 'inherit' }} /><button className="button button-mini" disabled={!draft.trim()}><Send size={13} /> Send reply</button></form>
         <button className="small-link" onClick={clearThread} style={{ alignSelf: 'flex-end', marginTop: 10, color: '#995f83' }}><Trash2 size={13} /> Delete chat and reference files after completion</button>
@@ -2254,7 +2042,6 @@ function AdminOpsPanel({ tab, setTab }) {
   if (tab === 'Messages') return <AdminConversationsPanel />;
   if (tab === 'Custom Requests') return <AdminCustomRequestsPanel onMessages={() => setTab('Messages')} />;
   if (tab === 'Team') return <AdminTeamPanel />;
-  if (tab === 'Payment Setup') return <AdminPaymentSetupPanel />;
   if (tab === 'Reviews') return <AdminReviewsPanel />;
   return <div className="ops-section"><EmptyState title={`No ${tab.toLowerCase()} records yet`} body="This section will show information after it has been added to your studio database." /></div>;
 }
@@ -2274,14 +2061,13 @@ function AdminDashboard({ token, onOpenOrders }) {
     ['Orders today', summary.ordersToday || 0],
     ['Pending quotes', summary.pendingQuotes || 0],
     ['In production', summary.inProduction || 0],
-    ['Recorded revenue', formatINR(summary.totalRevenue || 0)],
   ] : [];
   return <div className="ops-section">
     {error && <div role="alert" style={{ color: '#c55a83', marginBottom: 12 }}>{error}</div>}
     {!summary ? <GlassCard className="empty-state"><p>Loading studio records…</p></GlassCard> : <>
       <div className="admin-stat-grid">{stats.map(([label, value]) => <GlassCard key={label}><span className="stat-label">{label}</span><strong>{value}</strong></GlassCard>)}</div>
       <GlassCard className="ops-table-card"><div className="admin-card-heading"><div><p className="eyebrow">Latest activity</p><h2>Recent orders</h2></div><button className="small-link" onClick={onOpenOrders}>View all <ArrowUpRight size={14} /></button></div>
-        {orders.length ? orders.slice(0, 5).map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.productNames || 'Order'}</strong><span>Order ID: {order.id} · {typeof order.customer === 'string' ? order.customer : order.customer?.name || order.customer_name || order.email || 'Customer'}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge><span>{formatINR(order.total ?? order.pricing?.total ?? 0)}</span><span>{order.paymentStatus || order.payment_status || 'PENDING'}</span></div>) : <EmptyState title="No orders yet" body="Real customer orders will appear here." />}
+        {orders.length ? orders.slice(0, 5).map((order) => <div className="ops-order-row" key={order.id}><div><strong>{order.productNames || 'Order'}</strong><span>Order ID: {order.id} · {typeof order.customer === 'string' ? order.customer : order.customer?.name || order.customer_name || order.email || 'Customer'}</span></div><Badge tone={order.status === 'DELIVERED' ? 'icy' : 'blush'}>{order.status}</Badge></div>) : <EmptyState title="No orders yet" body="Real customer orders will appear here." />}
       </GlassCard>
     </>}
   </div>;
@@ -2324,7 +2110,7 @@ function AdminPage() {
     return <Navigate to="/login" replace state={{ from: { pathname: '/admin' } }} />;
   }
 
-  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Messages', MessageCircle], ['Custom Requests', WandSparkles], ['Products', Palette], ['Categories', Tag], ['Payment Setup', CreditCard], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ...(String(adminUser?.role).toUpperCase() === 'OWNER' ? [['Team', UserPlus]] : []), ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Payment Issues', AlertCircle], ['Settings', Settings]];
+  const adminLinks = [['Dashboard', LayoutDashboard], ['Orders', Package], ['Custom Requests', WandSparkles], ['Products', Palette], ['Categories', Tag], ['Delivery Areas', Truck], ['Delivery Slots', CalendarDays], ['Customers', Users], ['Reviews', Star], ['Inventory', BarChart3], ['Homepage', WandSparkles], ['Pages', FileText], ['Store Controls', SlidersHorizontal], ...(String(adminUser?.role).toUpperCase() === 'OWNER' ? [['Team', UserPlus]] : []), ['Reports', ClipboardList], ['Notifications', Bell], ['Audit Log', LockKeyhole], ['Settings', Settings]];
   return <GradientBackground variant="admin"><Navbar cartCount={useApp().cart.length} /><main className="admin-shell container"><aside className="admin-sidebar"><div className="admin-brand"><span>EFU</span><div><strong>Studio desk</strong><small>Especially For U</small></div></div><nav>{adminLinks.map(([label, Component]) => <button className={tab === label ? 'is-active' : ''} key={label} onClick={() => setTab(label)}><Component size={16} />{label}</button>)}</nav><div className="admin-sidebar-foot"><span className="admin-avatar">{adminUser?.name ? adminUser.name[0] : 'A'}</span><div><strong>{adminUser?.name || 'Admin'}</strong><small>{adminUser?.role || 'Owner'}</small></div><button onClick={handleLogout} title="Log out" style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto', color: 'var(--muted)', display: 'grid', placeItems: 'center' }}><LogOut size={15} /></button></div></aside><section className="admin-content"><div className="admin-mobile-title"><div><p className="eyebrow">Studio desk</p><h1>{tab}</h1></div><Button variant="secondary" icon={<Plus size={16} />}>Add new</Button></div>{tab === 'Dashboard' ? <AdminDashboard token={token} onOpenOrders={() => setTab('Orders')} /> : <AdminOpsPanel tab={tab} setTab={setTab} />}</section></main></GradientBackground>;
 }
 
@@ -2425,9 +2211,9 @@ function AppContent() {
 
             {/* Actions and customer data require a customer account */}
             <Route path="/custom-request" element={<CustomRequestPage />} />
-            <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
-            <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
-            <Route path="/track-order" element={<Navigate to="/account" replace />} />
+            <Route path="/cart" element={<Navigate to="/shop" replace />} />
+            <Route path="/checkout" element={<Navigate to="/shop" replace />} />
+            <Route path="/track-order" element={<Navigate to="/shop" replace />} />
 
             {/* Customer Account Routes (Protected) */}
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />

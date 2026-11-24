@@ -55,8 +55,8 @@ export const cmsPages = [
 
 export const faqs = [
   { question: 'Do you deliver outside Muradnagar?', answer: 'Not at launch. Other locations in Muradnagar can be requested manually; areas outside Muradnagar are not accepted.' },
-  { question: 'Can I request a custom version of a ready-made product?', answer: 'Yes. Every product has a Request Custom Version option so the studio can review your changes and send a manual quote.' },
-  { question: 'When can I cancel?', answer: 'You can cancel until the order is confirmed. Once production starts, the refund depends on the policy stage shown on your order.' },
+  { question: 'How do I ask about a product?', answer: 'Tap “Inquire on WhatsApp” on any product. WhatsApp opens with the product name, ID and link already included; check the message and tap Send.' },
+  { question: 'Can I ask for a custom version?', answer: 'Yes. Open the custom request page or tap “Ask about a custom version” on a product, share your idea and references, then send the prepared message in WhatsApp.' },
 ];
 
 export const adminNeedsAttention = [];
@@ -68,9 +68,8 @@ export const sampleRequests = [];
 
 export const howItWorks = [
   { number: '01', title: 'Pick or describe', text: 'Choose a ready-made piece or tell us the idea living in your head.', icon: 'sparkles' },
-  { number: '02', title: 'Get a quote', text: 'For custom work, we review your brief and send a clear, friendly quote.', icon: 'message-circle' },
-  { number: '03', title: 'Pay in two steps', text: 'Send a 50% UPI advance. We’ll verify it before we begin, then collect the balance at handover.', icon: 'credit-card' },
-  { number: '04', title: 'We craft & deliver', text: 'Your piece is made slowly and delivered within Muradnagar.', icon: 'heart-handshake' },
+  { number: '02', title: 'Inquire on WhatsApp', text: 'The product details or your idea will be ready in a message. Review it and tap Send.', icon: 'message-circle' },
+  { number: '03', title: 'We’ll talk it through', text: 'We’ll discuss your preferences, timing and next steps directly on WhatsApp.', icon: 'heart-handshake' },
 ];
 
 export const formatINR = (value) => `₹${Number(value).toLocaleString('en-IN')}`;

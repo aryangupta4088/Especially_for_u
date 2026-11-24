@@ -743,16 +743,13 @@ h1 em, h2 em { color: #9a5e86; font-style: italic; }
 .admin-product-group > summary > svg { margin-left: auto; color: var(--muted); transition: transform .2s; }
 .admin-product-group[open] > summary > svg { transform: rotate(180deg); }
 .admin-product-list { padding: 0 12px; }
-.admin-product-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 92px 76px 64px; align-items: center; gap: 11px; min-height: 64px; padding: 7px 0; border-top: 1px solid var(--line); }
+.admin-product-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 76px 64px; align-items: center; gap: 11px; min-height: 64px; padding: 7px 0; border-top: 1px solid var(--line); }
 .admin-product-image { width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 9px; object-fit: cover; }
 .admin-product-details { min-width: 0; }
 .admin-product-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .admin-product-name strong { overflow: hidden; color: var(--ink); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-product-name .badge { flex: 0 0 auto; padding: 3px 6px; font-size: 7px; }
 .admin-product-meta { display: block; overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.admin-product-price strong, .admin-product-price small { display: block; }
-.admin-product-price strong { color: var(--ink); font-size: 10px; }
-.admin-product-price small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .admin-product-status { display: grid; justify-items: center; gap: 3px; }
 .admin-product-status .toggle { width: 32px; height: 18px; padding: 2px; }
 .admin-product-status .toggle span { width: 14px; height: 14px; }
@@ -762,10 +759,9 @@ h1 em, h2 em { color: #9a5e86; font-style: italic; }
 .admin-product-actions .icon-button { width: 28px; height: 28px; }
 @media (max-width: 780px) {
   .admin-product-list { padding: 0 9px; }
-  .admin-product-row { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "image details status" "image price actions"; gap: 2px 9px; min-height: 62px; }
+  .admin-product-row { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "image details status" "image actions actions"; gap: 2px 9px; min-height: 62px; }
   .admin-product-image { grid-area: image; width: 36px; height: 36px; }
   .admin-product-details { grid-area: details; }
-  .admin-product-price { grid-area: price; }
   .admin-product-status { grid-area: status; display: flex; align-items: center; justify-self: end; gap: 5px; }
   .admin-product-actions { grid-area: actions; }
 }

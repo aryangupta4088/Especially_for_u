@@ -24,11 +24,11 @@ The migrations create catalogue, settings, delivery, order, order-item, custom-r
 
 The studio admin page is `/admin`. It uses the same email/password sign-in page as customers: admins enter their admin credentials there and are routed to the Studio Desk. Configure the owner with `ADMIN_1_EMAIL`, `ADMIN_1_PASSWORD` and optionally `ADMIN_1_NAME` (up to five environment owners are supported). The owner can add or deactivate team accounts in Studio Team. Team accounts are created inside the admin area; public admin registration is disabled. Set a strong `JWT_SECRET` in production.
 
-## Manual payments and media
+## WhatsApp inquiries and media
 
-In Admin → Payment Setup, upload the studio UPI QR image and enter the UPI ID and payment instructions. The customer reports payment from checkout or order tracking; an admin verifies the transfer and records the amount before the order balance changes. Customers pay 50% before work begins and the remaining amount before handover.
+The public storefront sends product and custom inquiries to WhatsApp with identifying details prefilled. Customers review the message and tap Send in WhatsApp. Public product responses omit price and discount fields, and public settings omit UPI and payment configuration. Historical order/payment records remain stored for existing records; customers cannot start a checkout or payment flow on the storefront.
 
-Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` in the backend environment to store product/category images, the payment QR, and customer request images/videos in Cloudinary. MySQL stores the secure Cloudinary URLs; the API secret stays server-side and must never be added to frontend variables. Request media is limited to five files, each up to 8 MB. Admins can clear the chat and reference media after marking a request or order complete; clearing also deletes those Cloudinary assets. If Cloudinary credentials are absent, local development falls back to `UPLOAD_DIR` (default `public/uploads`). Existing local files are not moved automatically; upload them again after configuring Cloudinary, or keep the old files available until migrated.
+Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` in the backend environment to store product/category images, homepage images, and existing request reference media in Cloudinary. MySQL stores the secure Cloudinary URLs; the API secret stays server-side and must never be added to frontend variables. Existing request media is limited to five files, each up to 8 MB. Admins can clear existing request media after completion; clearing also deletes those Cloudinary assets. If Cloudinary credentials are absent, local development falls back to `UPLOAD_DIR` (default `public/uploads`). Existing local files are not moved automatically; run `npm run media:migrate` to transfer available local uploads and update matching database links.
 
 ## Email verification
 

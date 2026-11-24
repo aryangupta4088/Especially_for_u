@@ -173,20 +173,18 @@ app.get('/api/categories', async (_request, response, next) => {
 app.get('/api/settings/public', async (_request, response, next) => {
   try {
     const settings = await repository.getPublicSettings();
-    const payment = paymentConfig();
+    const { upiId, upiQrImage, paymentInstructions, giftWrapPrice, pricesIncludeTax, ...storefrontSettings } = settings;
     return response.json({
-      settings: {
-        ...settings,
-        razorpayKeyId: payment.keyId,
-        razorpayTestMode: payment.testMode,
-        paymentConfigured: payment.configured,
-      },
+      settings: storefrontSettings,
     });
   } catch (error) { return next(error); }
 });
 
 app.get('/api/delivery/areas', async (_request, response, next) => {
-  try { return response.json({ areas: await repository.listDeliveryAreas(), slots: await repository.listDeliverySlots() }); }
+  try {
+    const areas = await repository.listDeliveryAreas();
+    return response.json({ areas: areas.map(({ fee, ...area }) => area), slots: await repository.listDeliverySlots() });
+  }
   catch (error) { return next(error); }
 });
 

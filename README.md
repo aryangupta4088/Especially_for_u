@@ -1,6 +1,6 @@
 # Especially For U
 
-A dreamy, premium-handmade e-commerce site for a student-run creative studio in Muradnagar. It includes the visual storefront plus an Express REST backend with managed-MySQL persistence, server-side order pricing, custom-request validation, delivery/settings APIs, protected admin endpoints and notification placeholders.
+A handmade-gift storefront for a student-run creative studio in Muradnagar. Customers browse products and send product or custom inquiries through WhatsApp. Product links include the product name, ID and page URL in a prefilled WhatsApp message. The storefront displays no prices and does not offer cart, checkout or online payment.
 
 ## Run locally
 
@@ -16,7 +16,7 @@ The Webdev runtime uses port `3000`.
 
 ## Prototype routes
 
-`/` · `/shop` · `/category/:slug` · `/occasion/:occasion` · `/product/:slug` · `/custom-request` · `/cart` · `/checkout` · `/account` · `/account/requests/:id` · `/track-order` · `/about` · `/pages/:slug` · `/admin`
+`/` · `/shop` · `/category/:slug` · `/occasion/:occasion` · `/product/:slug` · `/custom-request` · `/account` · `/about` · `/pages/:slug` · `/admin`
 
 ## Data seam
 
@@ -24,10 +24,11 @@ The seed catalogue lives in `src/mockData.js`; the storefront uses the API when 
 
 ## Revised prompt coverage
 
-- Product actions create a custom request linked to the selected item. Customers can attach reference images or videos and continue the conversation in their account.
-- Checkout includes Muradnagar area selection, KIET handover spots, home-delivery slots, “Other location in Muradnagar” manual approval messaging, ready-by guidance, Indian phone labeling, gift recipient/message/hide-sender/gift-wrap fields, policy consent and payment-plan explanations.
-- Studio Admin has one independent sign-in, owner-managed team accounts, product editing and scheduled discounts, customer chats and quotes, order status, and manually verified payment balances.
-- Payments use a 50% UPI advance and a manually recorded balance. Add the QR image and UPI ID in Admin → Payment Setup.
+- Product actions prepare a WhatsApp inquiry linked to the selected item. Customers attach any reference images or videos directly in WhatsApp after it opens.
+- Product inquiries open WhatsApp with the product name, ID, page link and selected options already filled in. Customers tap Send in WhatsApp to contact the studio.
+- The custom idea form prepares a WhatsApp message with the visitor’s details and request description. Reference photos or videos are attached manually in WhatsApp after it opens.
+- The public storefront does not expose product prices, cart or checkout. Historical order and payment records remain stored for reference; they are not shown in the storefront.
+- Studio Admin has one independent sign-in, owner-managed team accounts, product and media management, reviews and historical order records.
 - Policy pages and FAQ content are intentionally labelled starter copy requiring review before publishing.
 
 ## Design tokens
@@ -47,6 +48,6 @@ Typography uses Fraunces for display headings and DM Sans for UI/body. Cards use
 
 ## Backend and production
 
-The API is in `server/` and uses MySQL when `DATABASE_URL` is available, with a memory fallback for local development. Run `npm run db:migrate` before using the new chat, payment and sale features on the managed database. Configure `JWT_SECRET`, `GOOGLE_CLIENT_ID`, owner `ADMIN_1_*` settings and a persistent `UPLOAD_DIR` on the host. See [`server/README.md`](server/README.md) for setup and storage details. `Dockerfile` builds the frontend and starts the API on `PORT` (default 3000).
+The API is in `server/` and uses MySQL when `DATABASE_URL` is available, with a memory fallback for local development. Configure `JWT_SECRET`, owner `ADMIN_1_*` settings and Cloudinary credentials on the host. See [`server/README.md`](server/README.md) for setup and storage details. `Dockerfile` builds the frontend and starts the API on `PORT` (default 3000).
 
 Order notifications are intentionally **placeholders** right now: `.env.example` leaves `NOTIFICATIONS_ENABLED=false` and `ORDER_NOTIFICATION_EMAIL` empty. An email address alone is not an outbound email service; enable the built-in owner alert path only after choosing it, or configure a real customer-email provider through protected project secrets. See [`server/README.md`](server/README.md) for API routes and the notification boundary.
